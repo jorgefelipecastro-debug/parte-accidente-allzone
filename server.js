@@ -82,14 +82,16 @@ const server = http.createServer(async (req, res) => {
   req.on('end', async () => {
     try {
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      const to = String(body.to || '').trim();
+      const rawRecipients = Array.isArray(body.recipients) ? body.recipients : [body.to];
+      const recipients = [...new Set(rawRecipients.map(v=>String(v||'').trim().toLowerCase()).filter(validEmail))];
+      if (!recipients.includes(SENDER_EMAIL.toLowerCase())) recipients.unshift(SENDER_EMAIL.toLowerCase());
       const filename = String(body.filename || 'Parte_Accidente_Allzone.pdf').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
       const pdfBase64 = String(body.pdfBase64 || '');
       const plateA = String(body.plateA || '').trim().slice(0,30);
       const plateB = String(body.plateB || '').trim().slice(0,30);
       const date = String(body.date || '').trim().slice(0,30);
 
-      if (!validEmail(to)) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
+      if (!recipients.length || recipients.length > 6) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
       if (!pdfBase64 || pdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_attachment'}, origin);
 
       const subject = ['Parte de accidente Allzone', plateA && ('A '+plateA), plateB && ('B '+plateB), date].filter(Boolean).join(' - ');
@@ -98,31 +100,33 @@ const server = http.createServer(async (req, res) => {
         '<br><b>Fecha:</b> '+escapeHtml(date || '—')+
         '</p><p>Allzone Logistics</p>';
 
-      const payload = {
-        sender: {email:SENDER_EMAIL, name:SENDER_NAME},
-        to: [{email:to}],
-        subject,
-        htmlContent,
-        attachment: [{name:filename, content:pdfBase64}],
-        replyTo: {email:SENDER_EMAIL, name:SENDER_NAME}
-      };
-
-      const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method:'POST',
-        headers:{'accept':'application/json','api-key':BREVO_API_KEY,'content-type':'application/json'},
-        body:JSON.stringify(payload)
-      });
-      const text = await r.text();
-      let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch {}
-
-      if (!r.ok) {
-        console.error('brevo_send_failed', r.status, data && data.code);
-        return json(res, 502, {ok:false,error:'mail_provider_rejected'}, origin);
+      const results = [];
+      for (const to of recipients) {
+        const payload = {
+          sender: {email:SENDER_EMAIL, name:SENDER_NAME},
+          to: [{email:to}],
+          subject,
+          htmlContent,
+          attachment: [{name:filename, content:pdfBase64}],
+          replyTo: {email:SENDER_EMAIL, name:SENDER_NAME}
+        };
+        const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method:'POST',
+          headers:{'accept':'application/json','api-key':BREVO_API_KEY,'content-type':'application/json'},
+          body:JSON.stringify(payload)
+        });
+        const text = await r.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch {}
+        if (!r.ok) {
+          console.error('brevo_send_failed', r.status, data && data.code, to);
+          return json(res, 502, {ok:false,error:'mail_provider_rejected',failedRecipient:to}, origin);
+        }
+        results.push({email:to,messageId:data.messageId || null});
       }
 
-      console.log('mail_sent', data.messageId || 'ok');
-      return json(res, 200, {ok:true,messageId:data.messageId || null}, origin);
+      console.log('mail_sent', results.length);
+      return json(res, 200, {ok:true,recipients:results.map(r=>r.email)}, origin);
     } catch (e) {
       console.error('send_report_error', e && e.message);
       return json(res, 400, {ok:false,error:'bad_request'}, origin);

@@ -296,11 +296,15 @@ function wrapText(x,text,left,top,width,lineHeight,maxLines=100){const result=[]
 function dateText(v){return /^\d{4}-\d\d-\d\d$/.test(v||'')?v.split('-').reverse().join('/'):v||'';}
 
 function daaVectorImpactData(side){
- const cv=document.createElement('canvas');cv.width=360;cv.height=250;const q=cv.getContext('2d');
+ // El DAA final reutiliza exactamente el mismo lienzo y coordenadas
+ // que la pantalla donde el usuario marca los impactos: 320 x 230.
+ // De este modo no se recalculan ni desplazan los puntos.
+ const cv=document.createElement('canvas');cv.width=320;cv.height=230;const q=cv.getContext('2d');
  q.fillStyle='#fff';q.fillRect(0,0,cv.width,cv.height);
  technicalVehicle(q,state[prefixOf(side)+'vehicle_type']||'Coche',cv.width,cv.height,side);
- const key=(side==='A'||side==='B')?'impacts'+side:prefixOf(side)+'impacts',pts=getImpactList(key);
- pts.forEach((p,i)=>{const px=p[0]*cv.width/320,py=p[1]*cv.height/290;q.fillStyle='#c3261e';q.beginPath();q.arc(px,py,8,0,Math.PI*2);q.fill();q.fillStyle='#fff';q.font='bold 10px Arial';q.textAlign='center';q.fillText(String(i+1),px,py+3);});
+ const key=(side==='A'||side==='B')?'impacts'+side:prefixOf(side)+'impacts';
+ const pts=getImpactList(key).map(p=>[Number(p[0]),Number(p[1])]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+ renderImpactMarkers(q,pts);
  const out=cv.toDataURL('image/png');cv.width=cv.height=1;return out;
 }
 function daaVectorSketchData(partner){

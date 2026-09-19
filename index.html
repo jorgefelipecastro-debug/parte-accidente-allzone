@@ -351,10 +351,10 @@ async function prepareFinalFleetReport(){
  try{
   const result=await buildDocument('full','B');
   const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
-  const name='INFORME_COMPLETO_FLOTA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
+  const name='INFORME_UNICO_FLOTA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
   const file=new File([result.blob],name,{type:'application/pdf',lastModified:Date.now()});
   finalFleetReport={blob:result.blob,file,name,pages:result.pages};
-  if(status)status.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB · Incluye parte, fotos y ubicación.';
+  if(status)status.textContent='1 único PDF · '+result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB · Incluye parte, todas las fotos y ubicación.';
   if(btn){btn.disabled=false;btn.textContent='DESCARGAR INFORME COMPLETO PARA FLOTA';}
  }catch(e){
   finalFleetReport=null;
@@ -368,7 +368,7 @@ async function downloadOrShareFleetReport(){
  const {blob,file,name}=finalFleetReport;
  try{
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-   await navigator.share({files:[file],title:'Informe completo Parte Accidente Allzone',text:'Informe completo para Flota: parte, fotografías y ubicación del accidente.'});
+   await navigator.share({files:[file],title:'Informe único Parte Accidente Allzone',text:'Un único PDF para Flota con el parte, todas las fotografías y la ubicación del accidente.'});
    if(status)status.textContent='Informe preparado. Puedes enviarlo por WhatsApp desde el menú Compartir.';
    return;
   }
@@ -377,7 +377,7 @@ async function downloadOrShareFleetReport(){
  const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();
  if(status)status.textContent='Informe descargado. En el móvil puedes adjuntarlo en WhatsApp como documento.';
 }
-function reviewScreen(){host.innerHTML=`<div class="eyebrow">Finalizado</div><h1>Parte enviado correctamente</h1><p class="lead">El parte se ha enviado por correo. Para Flota se prepara un único informe con el parte, todas las fotografías y la ubicación del accidente.</p><div class="card"><p><b>Dirección:</b> ${esc(state.acc_place||'—')}</p><p><b>Código postal:</b> ${esc(state.acc_postcode||'—')}</p><button type="button" class="pillbtn primary" id="downloadFullOnly" disabled>PREPARANDO INFORME COMPLETO…</button><p class="hint">En móvil, al pulsar el botón se abrirá el menú Compartir para poder enviarlo por WhatsApp. En equipos sin esa función se descargará el PDF.</p><div id="finalReportStatus" role="status">Generando informe…</div></div>`;document.getElementById('downloadFullOnly').onclick=downloadOrShareFleetReport;prepareFinalFleetReport();}
+function reviewScreen(){host.innerHTML=`<div class="eyebrow">Finalizado</div><h1>Parte enviado correctamente</h1><p class="lead">El parte se ha enviado por correo. Para Flota se genera <b>un único PDF</b> que contiene el parte, todas las fotografías y la ubicación del accidente.</p><div class="card"><p><b>Dirección:</b> ${esc(state.acc_place||'—')}</p><p><b>Código postal:</b> ${esc(state.acc_postcode||'—')}</p><button type="button" class="pillbtn primary" id="downloadFullOnly" disabled>PREPARANDO INFORME COMPLETO…</button><p class="hint">WhatsApp recibirá un solo archivo PDF. Las fotografías y la ubicación van dentro del mismo documento, no como archivos separados.</p><div id="finalReportStatus" role="status">Generando informe…</div></div>`;document.getElementById('downloadFullOnly').onclick=downloadOrShareFleetReport;prepareFinalFleetReport();}
 function openDaaDocument(){return downloadPdf('pair');}
 const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<div class="eyebrow">Envío</div><h1>Correo del contrario</h1><p class="lead">Introduce el correo del conductor o asegurado del vehículo B. Flota recibirá automáticamente otra copia.</p><div class="card">${field('b_copy_email','Correo del contrario','email',{required:true})}<div class="fixed">Copia automática para Flota: flota@allzonelogistics.com</div><button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button><div id="pdfStatus" role="status"></div></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;};
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());

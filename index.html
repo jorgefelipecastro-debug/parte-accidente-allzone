@@ -302,7 +302,44 @@ async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdf
   if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El PDF se ha generado, pero no se pudo borrar el borrador local. Antes de otro parte, recarga y elige no continuar el borrador.';
  }
 }else if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El archivo está preparado; no se ha enviado por correo.';}catch(e){if(note)note.textContent='No se pudo generar: '+e.message;else navMessage(e.message);console.error(e);}finally{pdfBusy=false;nextBtn.disabled=false;}}
-function reviewScreen(){host.innerHTML=`<h1>Descargar documentación</h1><p class="lead">Comprueba el PDF antes de enviarlo. Flota y el contrario pueden recibir la misma copia A–B.</p><div class="card"><p><b>A:</b> ${esc(state.a_plate||'')} · ${esc(state.a_driver_name||'')} ${esc(state.a_driver_surname||'')}</p><p><b>B:</b> ${esc(state.b_plate||'')} · ${esc(state.b_driver_name||'')} ${esc(state.b_driver_surname||'')}</p><p><b>Flota:</b> flota@allzonelogistics.com<br><b>Contrario:</b> ${esc(state.b_copy_email||'')}</p><p class="hint">No hay envío automático de correo en esta prueba.</p></div><div class="card download-actions"><button type="button" class="pillbtn primary" id="downloadDaa">DESCARGAR DAA A–B</button><button type="button" class="pillbtn" id="downloadPairPhotos">DESCARGAR DAA A–B + SUS FOTOS</button><button type="button" class="pillbtn" id="downloadEvidence">DESCARGAR SOLO FOTOS</button><button type="button" class="pillbtn" id="downloadFull">EXPEDIENTE COMPLETO PARA FLOTA</button>${activeVehicles().slice(2).map(s=>`<button type="button" class="pillbtn" data-download-pair="${s}">DAA A–${s} Y SUS FOTOS</button>`).join('')}<div id="pdfStatus" role="status"></div><div id="pdfResults"></div><p class="hint">WhatsApp → clip o + → Documento → selecciona el PDF → Enviar.</p></div><div class="safe"><b>Plantilla de referencia:</b> se conserva la captura de DAA que has aportado. La identidad píxel a píxel con el PDF original de ParteAccidente no está certificada. Hasta comprobarlo contra el PDF original, utiliza esta versión para pruebas.</div>`;document.getElementById('downloadDaa').onclick=()=>downloadPdf('pair');document.getElementById('downloadPairPhotos').onclick=()=>downloadPdf('pairPhotos');document.getElementById('downloadEvidence').onclick=()=>downloadPdf('photos');document.getElementById('downloadFull').onclick=()=>downloadPdf('full');host.querySelectorAll('[data-download-pair]').forEach(b=>b.onclick=()=>downloadPdf('pairPhotos',b.dataset.downloadPair));}
+const MAIL_API='https://parte-accidente-mailer-production.up.railway.app';
+function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(r.error||new Error('No se pudo preparar el PDF.'));r.readAsDataURL(blob);});}
+async function sendReportByEmail(){
+ if(pdfBusy)return;
+ sync();
+ const recipients=[state.b_copy_email,state.a_copy_email].map(v=>String(v||'').trim()).filter(Boolean);
+ if(!recipients.length){navMessage('Introduce al menos una dirección de correo en la pantalla Entrega.');return;}
+ pdfBusy=true;nextBtn.disabled=true;
+ const note=document.getElementById('pdfStatus');
+ const btn=document.getElementById('sendEmailReport');
+ if(btn)btn.disabled=true;
+ if(note)note.textContent='Generando y enviando el parte…';
+ try{
+  const result=await buildDocument('pair','B');
+  const pdfBase64=await blobToBase64(result.blob);
+  const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
+  const filename='DAA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
+  const response=await fetch(MAIL_API+'/send-report',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({recipients,filename,pdfBase64,plateA:state.a_plate,plateB:state.b_plate,date:state.acc_date})
+  });
+  let data={};try{data=await response.json();}catch{}
+  if(!response.ok||!data.ok){
+   if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado. Falta activar la cuenta de correo una sola vez.');
+   if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
+   throw new Error('El servidor de correo no pudo completar el envío.');
+  }
+  await clearPersistedDraft();
+  if(note)note.textContent='✓ Parte enviado correctamente por correo a '+(data.recipients||[]).join(', ')+'. El borrador local se ha limpiado.';
+ }catch(e){
+  if(note)note.textContent='No se ha enviado el parte: '+e.message+' Tus datos se conservan.';
+  console.error(e);
+ }finally{
+  pdfBusy=false;nextBtn.disabled=false;if(btn)btn.disabled=false;
+ }
+}
+function reviewScreen(){host.innerHTML=`<h1>Descargar documentación</h1><p class="lead">Comprueba el PDF antes de enviarlo. Flota y el contrario pueden recibir la misma copia A–B.</p><div class="card"><p><b>A:</b> ${esc(state.a_plate||'')} · ${esc(state.a_driver_name||'')} ${esc(state.a_driver_surname||'')}</p><p><b>B:</b> ${esc(state.b_plate||'')} · ${esc(state.b_driver_name||'')} ${esc(state.b_driver_surname||'')}</p><p><b>Flota:</b> flota@allzonelogistics.com<br><b>Contrario:</b> ${esc(state.b_copy_email||'')}</p><p class="hint">No hay envío automático de correo en esta prueba.</p></div><div class="card download-actions"><button type="button" class="pillbtn primary" id="sendEmailReport">ENVIAR PARTE POR CORREO</button><p class="hint">Se enviará automáticamente el DAA A–B en PDF a Flota y a las direcciones de correo introducidas en el parte.</p><button type="button" class="pillbtn" id="downloadDaa">DESCARGAR DAA A–B</button><button type="button" class="pillbtn" id="downloadPairPhotos">DESCARGAR DAA A–B + SUS FOTOS</button><button type="button" class="pillbtn" id="downloadEvidence">DESCARGAR SOLO FOTOS</button><button type="button" class="pillbtn" id="downloadFull">EXPEDIENTE COMPLETO PARA FLOTA</button>${activeVehicles().slice(2).map(s=>`<button type="button" class="pillbtn" data-download-pair="${s}">DAA A–${s} Y SUS FOTOS</button>`).join('')}<div id="pdfStatus" role="status"></div><div id="pdfResults"></div><p class="hint">WhatsApp → clip o + → Documento → selecciona el PDF → Enviar.</p></div><div class="safe"><b>Plantilla de referencia:</b> se conserva la captura de DAA que has aportado. La identidad píxel a píxel con el PDF original de ParteAccidente no está certificada. Hasta comprobarlo contra el PDF original, utiliza esta versión para pruebas.</div>`;document.getElementById('sendEmailReport').onclick=sendReportByEmail;document.getElementById('downloadDaa').onclick=()=>downloadPdf('pair');document.getElementById('downloadPairPhotos').onclick=()=>downloadPdf('pairPhotos');document.getElementById('downloadEvidence').onclick=()=>downloadPdf('photos');document.getElementById('downloadFull').onclick=()=>downloadPdf('full');host.querySelectorAll('[data-download-pair]').forEach(b=>b.onclick=()=>downloadPdf('pairPhotos',b.dataset.downloadPair));}
 function openDaaDocument(){return downloadPdf('pair');}
 const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<h1>Destinatarios de las copias</h1><p class="lead">El documento se descarga; tú eliges dónde enviarlo.</p><div class="card"><label>Correo de Flota</label><div class="fixed">flota@allzonelogistics.com</div>${field('b_copy_email','Correo del contrario','email',{required:true})}${field('a_copy_email','Copia al conductor A (opcional)','email')}</div><p class="hint">El mismo DAA A–B está disponible para ambos. No se envían correos automáticamente.</p>`;};
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());

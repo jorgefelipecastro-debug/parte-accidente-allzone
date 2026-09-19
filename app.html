@@ -238,7 +238,43 @@ async function clearPersistedDraft(){
   }catch(e){reject(e);}
  });
 }
-async function restore(){try{database=await new Promise((res,rej)=>{const q=indexedDB.open('allzone-v16',1);q.onupgradeneeded=()=>{q.result.createObjectStore('meta');q.result.createObjectStore('photos');};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);q.onblocked=()=>rej(new Error('blocked'));});const read=(s,k)=>new Promise((res,rej)=>{const q=database.transaction(s).objectStore(s)[k?'get':'getAll'](k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});const m=await read('meta','draft');if(m&&Date.now()-m.at<86400000){const rows=await read('photos');for(const p of rows||[])if(p&&p.key&&p.data)photos.set(p.key,p);if(confirm('Hay un borrador de este navegador. ¿Continuar con él?')){Object.assign(state,m.state,{fleet_email:'flota@allzonelogistics.com'});idx=Math.min(m.index||0,getSteps().length-1);render();}else{photos.clear();const tx=database.transaction(['meta','photos'],'readwrite');tx.objectStore('photos').clear();tx.objectStore('meta').clear();}}else if(m){const tx=database.transaction(['meta','photos'],'readwrite');tx.objectStore('meta').clear();tx.objectStore('photos').clear();}}catch(e){database=null;}}
+async function startFreshSession(){
+ try{
+  database=await new Promise((res,rej)=>{
+   const q=indexedDB.open('allzone-v16',1);
+   q.onupgradeneeded=()=>{q.result.createObjectStore('meta');q.result.createObjectStore('photos');};
+   q.onsuccess=()=>res(q.result);
+   q.onerror=()=>rej(q.error);
+   q.onblocked=()=>rej(new Error('blocked'));
+  });
+  photos.clear();
+  await new Promise((resolve,reject)=>{
+   try{
+    const tx=database.transaction(['meta','photos'],'readwrite');
+    tx.objectStore('meta').clear();
+    tx.objectStore('photos').clear();
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error||new Error('No se pudo limpiar la sesión anterior.'));
+    tx.onabort=()=>reject(tx.error||new Error('No se pudo limpiar la sesión anterior.'));
+   }catch(e){reject(e);}
+  });
+ }catch(e){
+  console.warn('No se pudo inicializar el almacenamiento local limpio',e);
+  database=null;
+ }
+ draftFinalized=false;
+ render();
+}
+function purgePartOnExit(){
+ clearTimeout(savingTimer);
+ photos.clear();
+ if(!database)return;
+ try{
+  const tx=database.transaction(['meta','photos'],'readwrite');
+  tx.objectStore('meta').clear();
+  tx.objectStore('photos').clear();
+ }catch(e){console.warn('No se pudo limpiar al salir',e);}
+}
 function sync(){host.querySelectorAll('[data-field]').forEach(el=>state[el.dataset.field]=el.value);}
 function bindBasic(){host.querySelectorAll('[data-field]').forEach(el=>{const id='field_'+el.dataset.field;if(!el.id)el.id=id;const label=el.closest('.field')?.querySelector('label');if(label)label.htmlFor=el.id;const remember=()=>{state[el.dataset.field]=el.value;el.removeAttribute('aria-invalid');markChanged();};el.oninput=remember;el.onchange=remember;});host.querySelectorAll('[data-choice]').forEach(el=>el.onclick=()=>{sync();state[el.dataset.choice]=el.dataset.value;host.querySelectorAll(`[data-choice="${el.dataset.choice}"]`).forEach(b=>{b.classList.toggle('active',b===el);b.setAttribute('aria-pressed',String(b===el));});markChanged();});host.querySelectorAll('button[data-yn][data-value]').forEach(el=>el.onclick=()=>{sync();state[el.dataset.yn]=el.dataset.value;host.querySelectorAll(`button[data-yn="${el.dataset.yn}"]`).forEach(b=>b.classList.toggle('active',b===el));markChanged();});}
 function navMessage(text){const n=document.getElementById('navigationMessage');n.textContent=text;n.hidden=!text;}
@@ -516,5 +552,5 @@ function openDaaDocument(){return downloadPdf('pair');}
 const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<div class="eyebrow">Envío</div><h1>Correo del contrario</h1><p class="lead">Introduce el correo del conductor o asegurado del vehículo B. Flota recibirá automáticamente otra copia.</p><div class="card">${field('b_copy_email','Correo del contrario','email',{required:true})}<div class="fixed">Copia automática para Flota: flota@allzonelogistics.com</div><button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button><div id="pdfStatus" role="status"></div></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;};
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());
 window.AllzoneV16={version:VERSION,artworkReady,buildDocument,photos,navTimes,step:()=>({index:idx,title:getSteps()[idx].title}),show:title=>{sync();idx=getSteps().findIndex(s=>s.title===title);render();},render,ready:()=>photoJobs.size===0};
-window.addEventListener('pagehide',saveMeta);render();restore();
+window.addEventListener('pagehide',purgePartOnExit);startFreshSession();
 </script></body></html>

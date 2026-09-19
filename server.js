@@ -1,9 +1,9 @@
 const http = require('http');
 
 const PORT = Number(process.env.PORT || 3000);
-const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const SUPABASE_FUNCTION_URL = process.env.SUPABASE_FUNCTION_URL || '';
+const SUPABASE_INTERNAL_KEY = process.env.SUPABASE_INTERNAL_KEY || '';
 const SENDER_EMAIL = process.env.SENDER_EMAIL || 'flota@allzonelogistics.com';
-const SENDER_NAME = process.env.SENDER_NAME || 'Flota Allzone Logistics';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://jorgefelipecastro-debug.github.io';
 const MAX_BODY = 22 * 1024 * 1024;
 const rate = new Map();
@@ -49,7 +49,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    return json(res, 200, {ok:true, mailConfigured:Boolean(BREVO_API_KEY)}, origin);
+    return json(res, 200, {ok:true, mailConfigured:Boolean(SUPABASE_FUNCTION_URL && SUPABASE_INTERNAL_KEY)}, origin);
   }
 
   if (req.method !== 'POST' || req.url !== '/send-report') {
@@ -65,7 +65,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 429, {ok:false,error:'rate_limited'}, origin);
   }
 
-  if (!BREVO_API_KEY) {
+  if (!SUPABASE_FUNCTION_URL || !SUPABASE_INTERNAL_KEY) {
     return json(res, 503, {ok:false,error:'mail_not_configured'}, origin);
   }
 
@@ -94,39 +94,38 @@ const server = http.createServer(async (req, res) => {
       if (!recipients.length || recipients.length > 6) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
       if (!pdfBase64 || pdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_attachment'}, origin);
 
-      const subject = ['Parte de accidente Allzone', plateA && ('A '+plateA), plateB && ('B '+plateB), date].filter(Boolean).join(' - ');
-      const htmlContent = '<p>Adjuntamos el parte de accidente cumplimentado.</p><p><b>Vehículo A:</b> '+escapeHtml(plateA || '—')+
-        '<br><b>Vehículo B:</b> '+escapeHtml(plateB || '—')+
-        '<br><b>Fecha:</b> '+escapeHtml(date || '—')+
-        '</p><p>Allzone Logistics</p>';
+      const r = await fetch(SUPABASE_FUNCTION_URL, {
+        method:'POST',
+        headers:{
+          'content-type':'application/json',
+          'x-part-accident-key':SUPABASE_INTERNAL_KEY
+        },
+        body:JSON.stringify({
+          recipients,
+          filename,
+          pdfBase64,
+          plateA,
+          plateB,
+          date,
+          place:String(body.place || '').trim().slice(0,240)
+        })
+      });
 
-      const results = [];
-      for (const to of recipients) {
-        const payload = {
-          sender: {email:SENDER_EMAIL, name:SENDER_NAME},
-          to: [{email:to}],
-          subject,
-          htmlContent,
-          attachment: [{name:filename, content:pdfBase64}],
-          replyTo: {email:SENDER_EMAIL, name:SENDER_NAME}
-        };
-        const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method:'POST',
-          headers:{'accept':'application/json','api-key':BREVO_API_KEY,'content-type':'application/json'},
-          body:JSON.stringify(payload)
-        });
-        const text = await r.text();
-        let data = {};
-        try { data = text ? JSON.parse(text) : {}; } catch {}
-        if (!r.ok) {
-          console.error('brevo_send_failed', r.status, data && data.code, to);
-          return json(res, 502, {ok:false,error:'mail_provider_rejected',failedRecipient:to}, origin);
-        }
-        results.push({email:to,messageId:data.messageId || null});
+      const text = await r.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch {}
+
+      if (!r.ok || !data.ok) {
+        console.error('resend_send_failed', r.status, data && data.error);
+        return json(res, 502, {
+          ok:false,
+          error:data && data.error === 'provider_rejected' ? 'mail_provider_rejected' : 'mail_provider_error',
+          failedRecipient:data && data.failedRecipient ? data.failedRecipient : null
+        }, origin);
       }
 
-      console.log('mail_sent', results.length);
-      return json(res, 200, {ok:true,recipients:results.map(r=>r.email)}, origin);
+      console.log('mail_sent', Array.isArray(data.recipients) ? data.recipients.length : 0);
+      return json(res, 200, {ok:true,recipients:data.recipients || recipients}, origin);
     } catch (e) {
       console.error('send_report_error', e && e.message);
       return json(res, 400, {ok:false,error:'bad_request'}, origin);

@@ -266,11 +266,35 @@ function bindPhotos(){host.querySelectorAll('[data-photo-key]').forEach(inp=>inp
 // PDF primitives: only image streams; no external dependency, browser print dialog or network call.
 function bytesOf(data){return Uint8Array.from(atob(data.slice(data.indexOf(',')+1)),c=>c.charCodeAt(0));}
 async function pageRecord(c,lossless=false){if(lossless&&typeof CompressionStream==='function'){const rgba=c.getContext('2d').getImageData(0,0,c.width,c.height).data,rgb=new Uint8Array(c.width*c.height*3);for(let i=0,j=0;i<rgba.length;i+=4){rgb[j++]=rgba[i];rgb[j++]=rgba[i+1];rgb[j++]=rgba[i+2];}const stream=new Blob([rgb]).stream().pipeThrough(new CompressionStream('deflate'));return {width:c.width,height:c.height,bytes:new Uint8Array(await new Response(stream).arrayBuffer()),filter:'FlateDecode'};}return {width:c.width,height:c.height,bytes:bytesOf(c.toDataURL('image/jpeg',.93)),filter:'DCTDecode'};}
-function writePdf(pages){const enc=new TextEncoder(),chunks=[],offset=[0];let length=0;const write=s=>{const b=typeof s==='string'?enc.encode(s):s;chunks.push(b);length+=b.length;};const obj=(n,s)=>{offset[n]=length;write(n+' 0 obj\n'+s+'\nendobj\n');};write('%PDF-1.4\n');write(new Uint8Array([37,226,227,207,211,10]));obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Count '+pages.length+' /Kids ['+pages.map((p,i)=>(3+3*i)+' 0 R').join(' ')+'] >>');pages.forEach((p,i)=>{const n=3+3*i;obj(n,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /PageImage '+(n+2)+' 0 R >> >> /Contents '+(n+1)+' 0 R >>');const commands='q\n595.28 0 0 841.89 0 0 cm\n/PageImage Do\nQ\n';obj(n+1,'<< /Length '+enc.encode(commands).length+' >>\nstream\n'+commands+'endstream');offset[n+2]=length;write((n+2)+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+p.width+' /Height '+p.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /'+p.filter+' /Length '+p.bytes.length+' >>\nstream\n');write(p.bytes);write('\nendstream\nendobj\n');});const xref=length,size=3+pages.length*3;write('xref\n0 '+size+'\n0000000000 65535 f \n');for(let i=1;i<size;i++)write(String(offset[i]).padStart(10,'0')+' 00000 n \n');write('trailer\n<< /Size '+size+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n');return new Blob(chunks,{type:'application/pdf'});}
+function writePdf(pages){
+ const enc=new TextEncoder(),chunks=[],offset=[0];let length=0;
+ const write=s=>{const b=typeof s==='string'?enc.encode(s):s;chunks.push(b);length+=b.length;};
+ const obj=(n,s)=>{offset[n]=length;write(n+' 0 obj\n'+s+'\nendobj\n');};
+ const PAGE_W=595.28,PAGE_H=841.89;
+ write('%PDF-1.4\n');write(new Uint8Array([37,226,227,207,211,10]));
+ obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+ obj(2,'<< /Type /Pages /Count '+pages.length+' /Kids ['+pages.map((p,i)=>(3+3*i)+' 0 R').join(' ')+'] >>');
+ pages.forEach((p,i)=>{
+  const n=3+3*i;
+  obj(n,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PAGE_W+' '+PAGE_H+'] /Resources << /XObject << /PageImage '+(n+2)+' 0 R >> >> /Contents '+(n+1)+' 0 R >>');
+  const scale=Math.min(PAGE_W/p.width,PAGE_H/p.height);
+  const dw=p.width*scale,dh=p.height*scale,dx=(PAGE_W-dw)/2,dy=(PAGE_H-dh)/2;
+  const commands='q\n'+dw.toFixed(3)+' 0 0 '+dh.toFixed(3)+' '+dx.toFixed(3)+' '+dy.toFixed(3)+' cm\n/PageImage Do\nQ\n';
+  obj(n+1,'<< /Length '+enc.encode(commands).length+' >>\nstream\n'+commands+'endstream');
+  offset[n+2]=length;
+  write((n+2)+' 0 obj\n<< /Type /XObject /Subtype /Image /Width '+p.width+' /Height '+p.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /'+p.filter+' /Length '+p.bytes.length+' >>\nstream\n');
+  write(p.bytes);write('\nendstream\nendobj\n');
+ });
+ const xref=length,size=3+pages.length*3;
+ write('xref\n0 '+size+'\n0000000000 65535 f \n');
+ for(let i=1;i<size;i++)write(String(offset[i]).padStart(10,'0')+' 00000 n \n');
+ write('trailer\n<< /Size '+size+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n');
+ return new Blob(chunks,{type:'application/pdf'});
+}
 function blankPage(title,subtitle){const c=document.createElement('canvas');c.width=1654;c.height=2339;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#087f73';x.fillRect(0,0,c.width,15);x.font='bold 40px Arial';x.fillText('ALLZONE LOGISTICS',82,95);x.fillStyle='#1b3530';x.font='bold 46px Arial';x.fillText(title,82,167);x.font='26px Arial';wrapText(x,subtitle,82,221,1484,34,3);x.font='22px Arial';x.fillStyle='#45665b';x.fillText('flota@allzonelogistics.com · '+VERSION,82,2290);return c;}
 function wrapText(x,text,left,top,width,lineHeight,maxLines=100){const result=[];let line='';for(const ch of String(text||'')){if(ch==='\n'){result.push(line);line='';continue;}if(x.measureText(line+ch).width>width&&line){result.push(line);line='';}line+=ch;}if(line)result.push(line);result.slice(0,maxLines).forEach((s,i)=>x.fillText(s,left,top+i*lineHeight));return result.length;}
 function dateText(v){return /^\d{4}-\d\d-\d\d$/.test(v||'')?v.split('-').reverse().join('/'):v||'';}
-async function daaPage(partner='B',demo=false){await artworkReady;const template=await templateReady,c=document.createElement('canvas');c.width=1626;c.height=2301;const x=c.getContext('2d');x.scale(3,3);x.imageSmoothingEnabled=false;x.drawImage(template,0,0,542,767);x.imageSmoothingEnabled=true;x.translate(-21,-8);x.fillStyle='#15251e';const overflow=[];const put=(val,left,top,w,h=9,size=5.9,label='')=>{val=String(val??'');if(!val)return;x.font=size+'px Arial';while(x.measureText(val).width>w&&size>4.8){size-=.15;x.font=size+'px Arial';}if(x.measureText(val).width>w){overflow.push((label||'Dato')+': '+val);let s=val;while(s&&x.measureText(s+'…').width>w)s=s.slice(0,-1);val=s+'…';}x.fillText(val,left,top+h-2);};
+async function daaPage(partner='B',demo=false){await artworkReady;const template=await templateReady,c=document.createElement('canvas');const DAA_W=542,DAA_H=767,DAA_SCALE=3;c.width=DAA_W*DAA_SCALE;c.height=DAA_H*DAA_SCALE;const x=c.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.scale(DAA_SCALE,DAA_SCALE);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(template,0,0,DAA_W,DAA_H);x.translate(-21,-8);x.fillStyle='#15251e';const overflow=[];const put=(val,left,top,w,h=9,size=5.9,label='')=>{val=String(val??'');if(!val)return;x.font=size+'px Arial';while(x.measureText(val).width>w&&size>4.8){size-=.15;x.font=size+'px Arial';}if(x.measureText(val).width>w){overflow.push((label||'Dato')+': '+val);let s=val;while(s&&x.measureText(s+'…').width>w)s=s.slice(0,-1);val=s+'…';}x.fillText(val,left,top+h-2);};
  const check=(left,top,ok)=>{if(!ok)return;x.strokeStyle='#122a21';x.lineWidth=.85;x.beginPath();x.moveTo(left-2,top-2);x.lineTo(left+2,top+2);x.moveTo(left-2,top+2);x.lineTo(left+2,top-2);x.stroke();};
  put(dateText(state.acc_date),50,70,69);put(state.acc_time,130,70,32);put(state.acc_place,249,65,75,9,5.4,'Lugar del accidente');put(state.acc_country,188,75,132,7,5.5);check(363,78,state.victims==='No');check(406,78,state.victims==='Sí');check(75,112,state.other_vehicles_damage!=='Sí');check(116,112,state.other_vehicles_damage==='Sí');check(158,112,state.other_objects_damage!=='Sí');check(201,112,state.other_objects_damage==='Sí');put(state.witnesses,224,96,309,9,5.4,'Testigos');
  for(const [side,p,dx] of [['A','a_',0],['B',prefixOf(partner),318]]){const pval=n=>state[p+n]||'';const f=(n,l,t,w,h=9)=>put(pval(n),l+dx,t,w,h,5.8,side+' '+n);
@@ -290,7 +314,7 @@ async function daaPage(partner='B',demo=false){await artworkReady;const template
 async function photoPages(partner=null){const ts=photoTargets().filter(t=>photos.has(t.key)&&(!partner||t.key==='a_damage'||t.key==='a_plate'||t.key===prefixOf(partner).slice(0,-1)+'_damage'||t.key===prefixOf(partner).slice(0,-1)+'_plate'));const pages=[];for(let i=0;i<ts.length;i+=2){const c=blankPage('Anexo fotográfico',dateText(state.acc_date)+' · A: '+(state.a_plate||'')+' · '+(state.acc_place||'')),x=c.getContext('2d');for(let j=0;j<2&&i+j<ts.length;j++){const t=ts[i+j],p=photos.get(t.key),im=await loadPicture(p.data),y=365+j*920;x.fillStyle='#e9f3ef';x.fillRect(82,y,1490,67);x.fillStyle='#22483d';x.font='bold 29px Arial';x.fillText(t.label,105,y+43);const fit=Math.min(1450/im.naturalWidth,725/im.naturalHeight),w=im.naturalWidth*fit,h=im.naturalHeight*fit;x.drawImage(im,102+(1450-w)/2,y+94+(725-h)/2,w,h);x.font='23px Arial';x.fillStyle='#516b61';x.fillText('Foto '+(i+j+1)+' de '+ts.length+' · '+(p.source==='camera'?'Cámara':'Biblioteca'),105,y+864);}pages.push(await pageRecord(c));c.width=c.height=1;await new Promise(r=>setTimeout(r,0));}return pages;}
 async function notesPage(title,rows){const pages=[];let c=blankPage(title,'Datos adicionales del accidente'),x=c.getContext('2d'),y=340;for(const [label,value] of rows){if(!value)continue;if(y>2040){pages.push(await pageRecord(c));c=blankPage(title+' (continuación)','');x=c.getContext('2d');y=340;}x.fillStyle='#173d32';x.font='bold 28px Arial';x.fillText(label,86,y);x.font='27px Arial';x.fillStyle='#243e34';const n=wrapText(x,value,86,y+42,1470,37,40);y+=82+n*37;}pages.push(await pageRecord(c));return pages;}
 async function buildDocument(mode='pair',partner='B',demo=false){await artworkReady;await Promise.all([...photoJobs.values()]);const pages=[];if(mode==='photos'){pages.push(...await photoPages());if(!pages.length)throw new Error('Añade al menos una foto y espera a ver la miniatura.');}
- else{const partners=mode==='full'?activeVehicles().slice(1):[partner];for(const s of partners){const part=await daaPage(s,demo);pages.push(await pageRecord(part.canvas,true));part.canvas.width=part.canvas.height=1;if(part.overflow.length)pages.push(...await notesPage('Datos ampliados del parte A–'+s,part.overflow.map((v,i)=>['Dato '+(i+1),v])));if(s!=='B')pages.push(...await notesPage('Correspondencia del parte A–'+s,[['Identificación','En la columna B del DAA anterior figura el vehículo '+s+' del expediente: '+(state[prefixOf(s)+'plate']||'')]]));}if(mode==='full')pages.push(...await notesPage('Ubicación exacta del accidente',[['Dirección',state.acc_place],['Código postal',state.acc_postcode],['Coordenadas GPS',state.acc_lat&&state.acc_lon?Number(state.acc_lat).toFixed(6)+', '+Number(state.acc_lon).toFixed(6):''],['Precisión GPS',state.acc_accuracy?Math.round(Number(state.acc_accuracy))+' m':'']]));if(mode==='full'&&state.other_objects_damage==='Sí')pages.push(...await notesPage('Daños a propiedad',[['Bien',state.property_type],['Descripción',state.property_description],['Titular',state.property_owner],['Contacto',state.property_owner_contact],['Dirección',state.property_address],['Aseguradora',state.property_insurer],['Póliza',state.property_policy],['Daños',state.property_damage_description]]));if(mode==='full')pages.push(...await photoPages());if(mode==='pairPhotos')pages.push(...await photoPages(partner));}
+ else{const partners=mode==='full'?activeVehicles().slice(1):[partner];for(const s of partners){const part=await daaPage(s,demo);pages.push(await pageRecord(part.canvas,true));part.canvas.width=part.canvas.height=1;if(part.overflow.length)pages.push(...await notesPage('Datos ampliados del parte A–'+s,part.overflow.map((v,i)=>['Dato '+(i+1),v])));if(s!=='B')pages.push(...await notesPage('Correspondencia del parte A–'+s,[['Identificación','En la columna B del DAA anterior figura el vehículo '+s+' del expediente: '+(state[prefixOf(s)+'plate']||'')]]));}if(mode==='full')pages.push(...await notesPage('Ubicación exacta del accidente',[['Dirección',state.acc_place],['Código postal',state.acc_postcode],['Coordenadas GPS',state.acc_lat&&state.acc_lon?Number(state.acc_lat).toFixed(6)+', '+Number(state.acc_lon).toFixed(6):''],['Precisión GPS',state.acc_accuracy?Math.round(Number(state.acc_accuracy))+' m':'']]));if(mode==='full'&&state.other_objects_damage==='Sí')pages.push(...await notesPage('Daños a propiedad',[['Bien',state.property_type],['Descripción',state.property_description],['Titular',state.property_owner],['Contacto',state.property_owner_contact],['Dirección',state.property_address],['Aseguradora',state.property_insurer],['Póliza',state.property_policy],['Daños',state.property_damage_description]]));if(mode==='full'){const appendix=await photoPages();if(!appendix.length)throw new Error('El informe completo necesita las fotografías del accidente. No se ha generado un PDF incompleto.');pages.push(...appendix);}if(mode==='pairPhotos')pages.push(...await photoPages(partner));}
  return {blob:writePdf(pages),pages:pages.length};}
 const downloadUrls=[];
 async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdfBusy=true;nextBtn.disabled=true;const note=document.getElementById('pdfStatus');if(note)note.textContent='Preparando el documento…';await new Promise(r=>requestAnimationFrame(r));try{const result=await buildDocument(mode,partner);const url=URL.createObjectURL(result.blob);downloadUrls.push(url);while(downloadUrls.length>6)URL.revokeObjectURL(downloadUrls.shift());const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_'),name=(mode==='photos'?'FOTOS_':mode==='full'?'EXPEDIENTE_':'DAA_')+'ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state[prefixOf(partner)+'plate'])+'.pdf';const box=document.getElementById('pdfResults');if(box)box.innerHTML=`<a class="download-link" href="${url}" download="${name}">Guardar ${esc(name)}</a><a class="download-link" href="${url}" target="_blank" rel="noopener">Ver y comprobar PDF</a>`;const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();if(getSteps()[idx]?.title==='Revisión'&&mode!=='photos'){
@@ -331,6 +355,8 @@ async function sendReportByEmail(){
    if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
    throw new Error('El servidor de correo no pudo completar el envío.');
   }
+  if(note)note.textContent='Correo enviado. Preparando el informe completo con las fotografías…';
+  finalFleetReport=await buildFinalFleetReportFile();
   await clearPersistedDraft();
   idx=getSteps().findIndex(s=>s.title==='Revisión');
   render();
@@ -342,19 +368,25 @@ async function sendReportByEmail(){
  }
 }
 let finalFleetReport=null,finalFleetReportPreparing=false;
+async function buildFinalFleetReportFile(){
+ await Promise.all([...photoJobs.values()]);
+ const expected=photoTargets().filter(t=>photos.has(t.key));
+ if(!expected.length)throw new Error('No hay fotografías cargadas. Vuelve a la pantalla de fotos antes de finalizar.');
+ const result=await buildDocument('full','B');
+ const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
+ const name='INFORME_UNICO_FLOTA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
+ const file=new File([result.blob],name,{type:'application/pdf',lastModified:Date.now()});
+ return {blob:result.blob,file,name,pages:result.pages,photoCount:expected.length};
+}
 async function prepareFinalFleetReport(){
- if(finalFleetReport||finalFleetReportPreparing)return;
+ if(finalFleetReport){const btn=document.getElementById('downloadFullOnly'),status=document.getElementById('finalReportStatus');if(status)status.textContent='1 único PDF · '+finalFleetReport.pages+' página(s) · '+finalFleetReport.photoCount+' foto(s) incluidas · '+(finalFleetReport.blob.size/1024/1024).toFixed(2)+' MB · Parte + ubicación + fotos.';if(btn){btn.disabled=false;btn.textContent='DESCARGAR INFORME COMPLETO PARA FLOTA';}return;}if(finalFleetReportPreparing)return;
  finalFleetReportPreparing=true;
  const btn=document.getElementById('downloadFullOnly'),status=document.getElementById('finalReportStatus');
  if(btn){btn.disabled=true;btn.textContent='PREPARANDO INFORME COMPLETO…';}
  if(status)status.textContent='Generando parte, fotografías y ubicación…';
  try{
-  const result=await buildDocument('full','B');
-  const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
-  const name='INFORME_UNICO_FLOTA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
-  const file=new File([result.blob],name,{type:'application/pdf',lastModified:Date.now()});
-  finalFleetReport={blob:result.blob,file,name,pages:result.pages};
-  if(status)status.textContent='1 único PDF · '+result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB · Incluye parte, todas las fotos y ubicación.';
+  finalFleetReport=await buildFinalFleetReportFile();
+  if(status)status.textContent='1 único PDF · '+finalFleetReport.pages+' página(s) · '+finalFleetReport.photoCount+' foto(s) incluidas · '+(finalFleetReport.blob.size/1024/1024).toFixed(2)+' MB · Parte + ubicación + fotos.';
   if(btn){btn.disabled=false;btn.textContent='DESCARGAR INFORME COMPLETO PARA FLOTA';}
  }catch(e){
   finalFleetReport=null;

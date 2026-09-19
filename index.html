@@ -172,7 +172,7 @@ function getSteps(){
 function photoTargets(){const list=[{key:'a_damage',label:'Vehículo A · Foto del daño',required:true},{key:'a_plate',label:'Vehículo A · Foto de la matrícula',required:true},{key:'b_damage',label:'Vehículo B · Foto del daño',required:true},{key:'b_plate',label:'Vehículo B · Foto de la matrícula',required:true},{key:'scene',label:'Posición de los vehículos / entorno',required:false},{key:'docs',label:'Documentación adicional',required:false}];if(state.other_vehicles_damage==='Sí'){const n=parseInt(state.additional_vehicle_count||'0',10)||0;for(let i=0;i<n;i++){const L=extraLabel(i);list.push({key:`extra_${i}_damage`,label:`Vehículo ${L} · Foto del daño`,required:true});list.push({key:`extra_${i}_plate`,label:`Vehículo ${L} · Foto de la matrícula`,required:true})}}return list}
 
 /* Allzone V16: shared approved image assets, local-only evidence and real PDF files. */
-const VERSION='V16 - IMAGENES Y PDF';
+const VERSION='V16.1 - DAA VECTORIAL HQ';
 const sprites={}, photos=new Map(), photoJobs=new Map();
 let database=null, savingTimer=0, pdfBusy=false, currentPhotoErrors=new Map(), draftFinalized=false;
 const artworkReady=Promise.all(['Moto','Coche','Camion'].map(async k=>{const im=await loadPicture(ARTWORK[k].src);sprites[k]=im;}));
@@ -294,23 +294,121 @@ function writePdf(pages){
 function blankPage(title,subtitle){const c=document.createElement('canvas');c.width=1654;c.height=2339;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#087f73';x.fillRect(0,0,c.width,15);x.font='bold 40px Arial';x.fillText('ALLZONE LOGISTICS',82,95);x.fillStyle='#1b3530';x.font='bold 46px Arial';x.fillText(title,82,167);x.font='26px Arial';wrapText(x,subtitle,82,221,1484,34,3);x.font='22px Arial';x.fillStyle='#45665b';x.fillText('flota@allzonelogistics.com · '+VERSION,82,2290);return c;}
 function wrapText(x,text,left,top,width,lineHeight,maxLines=100){const result=[];let line='';for(const ch of String(text||'')){if(ch==='\n'){result.push(line);line='';continue;}if(x.measureText(line+ch).width>width&&line){result.push(line);line='';}line+=ch;}if(line)result.push(line);result.slice(0,maxLines).forEach((s,i)=>x.fillText(s,left,top+i*lineHeight));return result.length;}
 function dateText(v){return /^\d{4}-\d\d-\d\d$/.test(v||'')?v.split('-').reverse().join('/'):v||'';}
-async function daaPage(partner='B',demo=false){await artworkReady;const template=await templateReady,c=document.createElement('canvas');const DAA_W=542,DAA_H=767,DAA_SCALE=3;c.width=DAA_W*DAA_SCALE;c.height=DAA_H*DAA_SCALE;const x=c.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.scale(DAA_SCALE,DAA_SCALE);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(template,0,0,DAA_W,DAA_H);x.translate(-21,-8);x.fillStyle='#15251e';const overflow=[];const put=(val,left,top,w,h=9,size=5.9,label='')=>{val=String(val??'');if(!val)return;x.font=size+'px Arial';while(x.measureText(val).width>w&&size>4.8){size-=.15;x.font=size+'px Arial';}if(x.measureText(val).width>w){overflow.push((label||'Dato')+': '+val);let s=val;while(s&&x.measureText(s+'…').width>w)s=s.slice(0,-1);val=s+'…';}x.fillText(val,left,top+h-2);};
- const check=(left,top,ok)=>{if(!ok)return;x.strokeStyle='#122a21';x.lineWidth=.85;x.beginPath();x.moveTo(left-2,top-2);x.lineTo(left+2,top+2);x.moveTo(left-2,top+2);x.lineTo(left+2,top-2);x.stroke();};
- put(dateText(state.acc_date),50,70,69);put(state.acc_time,130,70,32);put(state.acc_place,249,65,75,9,5.4,'Lugar del accidente');put(state.acc_country,188,75,132,7,5.5);check(363,78,state.victims==='No');check(406,78,state.victims==='Sí');check(75,112,state.other_vehicles_damage!=='Sí');check(116,112,state.other_vehicles_damage==='Sí');check(158,112,state.other_objects_damage!=='Sí');check(201,112,state.other_objects_damage==='Sí');put(state.witnesses,224,96,309,9,5.4,'Testigos');
- for(const [side,p,dx] of [['A','a_',0],['B',prefixOf(partner),318]]){const pval=n=>state[p+n]||'';const f=(n,l,t,w,h=9)=>put(pval(n),l+dx,t,w,h,5.8,side+' '+n);
- f('insured_name',85,151,131);f('insured_surname',87,164,129);f('insured_address',90,177,126);f('insured_postal',99,189,35);f('insured_country',151,189,65);f('insured_contact',96,200,120);
- f('vehicle_model',51,242,76,10);f('plate',51,258,76,11);f('plate_country',51,276,76,9);f('trailer_plate',141,258,74,11);f('trailer_country',141,276,74,9);
- f('insurer',82,300,134);f('policy',93,311,123);f('green_card',113,323,103);put(dateText(pval('green_from')),151+dx,345,43,9,5);put(dateText(pval('green_to')),198+dx,345,18,9,4.8,'Validez Carta Verde');f('agency',159,358,57);f('agency_name',85,369,131);f('agency_address',89,380,127);f('agency_country',153,391,63);f('agency_contact',96,403,120);check(102+dx,422,pval('own_damage')==='No');check(144+dx,422,pval('own_damage')==='Sí');
- f('driver_name',85,439,131);f('driver_surname',87,452,129);put(dateText(pval('driver_birth')),117+dx,465,99,8,5.8);f('driver_address',87,477,129,7);f('driver_country',152,488,64,7);f('driver_contact',96,500,120,8);f('license',129,511,87,8);f('license_category',117,523,99,8);put(dateText(pval('license_until')),121+dx,534,95,7,5.8);
- }
- const ei=partner.charCodeAt(0)-67,ca=partner==='B'?state.circA:state.extraCircA[ei]||{},cb=partner==='B'?state.circB:state.extraCircB[ei]||{};
- const yy=[174,184,202,217,239,258,280,301,328,349,363,377,391,405,419,440,461];yy.forEach((y,i)=>{check(229,y,ca[i+1]);check(352,y,cb[i+1]);});put(Object.values(ca).filter(Boolean).length,226,479,8,7,5.8);put(Object.values(cb).filter(Boolean).length,349,479,8,7,5.8);
- if(state.scene&&(state.scene.items.length||state.scene.lines.length)){const scene=document.createElement('canvas');scene.width=1320;scene.height=558;paintScene(scene,-1,partner);x.drawImage(scene,127,543,329,139);scene.width=scene.height=1;}
- for(const [s,isRight] of [['A',false],[partner,true]]){const pp=prefixOf(s),type=kind(state[pp+'vehicle_type']),key=s==='A'||s==='B'?'impacts'+s:pp+'impacts',hit=getImpactList(key)[0];if(!hit)continue;const regions=type==='Moto'?[51,593,15,35]:type==='Camion'?[97,578,23,49]:[71,581,22,47];let [lx,ly,w,h]=regions;if(isRight)lx+=413;const len=220,a=ARTWORK[type],ww=len*a.w/a.h,rx=Math.max(0,Math.min(1,(hit[0]-(160-ww/2))/ww)),ry=Math.max(0,Math.min(1,(hit[1]-(154-110))/220)),px=lx+w*rx,py=ly+h*ry;x.strokeStyle='#bb231a';x.lineWidth=1.1;x.beginPath();x.moveTo(px+10,py-12);x.lineTo(px,py);x.lineTo(px+1,py-5);x.moveTo(px,py);x.lineTo(px+5,py-1);x.stroke();}
- const textArea=(v,l,t,w,lines,label)=>{x.fillStyle='#12251e';x.font='5.7px Arial';const needed=wrapText(x,v,l,t,w,8,lines);if(needed>lines)overflow.push(label+': '+v);};textArea(state.a_damages||'',50,658,71,3,'Daños A');textArea(state[prefixOf(partner)+'damages']||'',463,658,70,3,'Daños '+partner);textArea(state.a_observations||'',50,703,149,3,'Observaciones A');textArea(state[prefixOf(partner)+'observations']||'',382,703,150,3,'Observaciones '+partner);
- const siga=partner==='B'?state.sigA:state[prefixOf(partner)+'sig_a'],sigb=partner==='B'?state.sigB:state[prefixOf(partner)+'sig'];if(siga){const im=await loadPicture(siga);x.drawImage(im,218,703,66,22);}if(sigb){const im=await loadPicture(sigb);x.drawImage(im,298,703,66,22);}
- if(!siga||!sigb||demo){x.save();x.globalAlpha=.30;x.fillStyle='#ba211b';x.font='bold 16px Arial';x.translate(285,405);x.rotate(-.42);x.textAlign='center';x.fillText(demo?'SIMULACIÓN · DATOS FICTICIOS':'BORRADOR · FALTAN FIRMAS',0,0);x.restore();}
- return {canvas:c,overflow};}
+
+function daaVectorImpactData(side){
+ const cv=document.createElement('canvas');cv.width=360;cv.height=250;const q=cv.getContext('2d');
+ q.fillStyle='#fff';q.fillRect(0,0,cv.width,cv.height);
+ technicalVehicle(q,state[prefixOf(side)+'vehicle_type']||'Coche',cv.width,cv.height,side);
+ const key=(side==='A'||side==='B')?'impacts'+side:prefixOf(side)+'impacts',pts=getImpactList(key);
+ pts.forEach((p,i)=>{const px=p[0]*cv.width/320,py=p[1]*cv.height/290;q.fillStyle='#c3261e';q.beginPath();q.arc(px,py,8,0,Math.PI*2);q.fill();q.fillStyle='#fff';q.font='bold 10px Arial';q.textAlign='center';q.fillText(String(i+1),px,py+3);});
+ const out=cv.toDataURL('image/png');cv.width=cv.height=1;return out;
+}
+function daaVectorSketchData(partner){
+ const cv=document.createElement('canvas');cv.width=1320;cv.height=558;const q=cv.getContext('2d');
+ q.fillStyle='#fff';q.fillRect(0,0,cv.width,cv.height);
+ if(state.scene&&((state.scene.items&&state.scene.items.length)||(state.scene.lines&&state.scene.lines.length)))paintScene(cv,-1,partner);
+ const out=cv.toDataURL('image/png');cv.width=cv.height=1;return out;
+}
+function daaV(v){return esc(v==null?'':v);}
+function daaMark(ok){return ok?'X':'';}
+function daaSideHtml(side,p,cls){
+ const v=n=>state[p+n]||'';
+ return '<div class="daa-col '+cls+'">'+
+ '<div class="daa-side-head">Vehículo '+side+'</div>'+
+ '<div class="daa-sec"><h5>6 Asegurado <small>(véase póliza de seguro)</small></h5>'+
+ '<div class="row">NOMBRE: <b>'+daaV(v('insured_name'))+'</b></div>'+
+ '<div class="row">Apellidos: <b>'+daaV(v('insured_surname'))+'</b></div>'+
+ '<div class="row">Dirección: <b>'+daaV(v('insured_address'))+'</b></div>'+
+ '<div class="row">Código Postal: <b>'+daaV(v('insured_postal'))+'</b> &nbsp; País: <b>'+daaV(v('insured_country'))+'</b></div>'+
+ '<div class="row">Tel. o E-mail: <b>'+daaV(v('insured_contact'))+'</b></div></div>'+
+ '<div class="daa-sec"><h5>7 Vehículo</h5><div class="daa-vehgrid"><div><div class="minihead">VEHÍCULO A MOTOR</div><div class="mini">Tipo<br><b>'+daaV(v('vehicle_type'))+'</b><br>Marca, modelo<br><b>'+daaV(v('vehicle_model'))+'</b><br>Matrícula (o bastidor)<br><b>'+daaV(v('plate'))+'</b><br>País de matrícula<br><b>'+daaV(v('plate_country'))+'</b></div></div><div><div class="minihead">REMOLQUE</div><div class="mini">Matrícula (o bastidor)<br><b>'+daaV(v('trailer_plate'))+'</b><br>País de matrícula<br><b>'+daaV(v('trailer_country'))+'</b></div></div></div></div>'+
+ '<div class="daa-sec"><h5>8 Aseguradora <small>(véase póliza de seguro)</small></h5>'+
+ '<div class="row">NOMBRE: <b>'+daaV(v('insurer'))+'</b></div>'+
+ '<div class="row">N.º de póliza: <b>'+daaV(v('policy'))+'</b></div>'+
+ '<div class="row">N.º de Carta Verde: <b>'+daaV(v('green_card'))+'</b></div>'+
+ '<div class="row">Carta Verde válida desde <b>'+daaV(dateText(v('green_from')))+'</b> hasta <b>'+daaV(dateText(v('green_to')))+'</b></div>'+
+ '<div class="row">Agencia (oficina o corredor): <b>'+daaV(v('agency'))+'</b></div>'+
+ '<div class="row">Nombre: <b>'+daaV(v('agency_name'))+'</b></div>'+
+ '<div class="row">Dirección: <b>'+daaV(v('agency_address'))+'</b></div>'+
+ '<div class="row">País: <b>'+daaV(v('agency_country'))+'</b></div>'+
+ '<div class="row">Tel. o E-mail: <b>'+daaV(v('agency_contact'))+'</b></div>'+
+ '<div class="row"><i>¿Los daños propios están asegurados?</i> <b>'+daaV(v('own_damage'))+'</b></div></div>'+
+ '<div class="daa-sec"><h5>9 Conductor <small>(ver permiso de conducir)</small></h5>'+
+ '<div class="row">NOMBRE: <b>'+daaV(v('driver_name'))+'</b></div>'+
+ '<div class="row">Apellidos: <b>'+daaV(v('driver_surname'))+'</b></div>'+
+ '<div class="row">Fecha de nacimiento: <b>'+daaV(dateText(v('driver_birth')))+'</b></div>'+
+ '<div class="row">Dirección: <b>'+daaV(v('driver_address'))+'</b></div>'+
+ '<div class="row">País: <b>'+daaV(v('driver_country'))+'</b></div>'+
+ '<div class="row">Tel. o E-mail: <b>'+daaV(v('driver_contact'))+'</b></div>'+
+ '<div class="row">Permiso de conducir n.º: <b>'+daaV(v('license'))+'</b></div>'+
+ '<div class="row">Categoría: <b>'+daaV(v('license_category'))+'</b></div>'+
+ '<div class="row">Permiso válido hasta: <b>'+daaV(dateText(v('license_until')))+'</b></div></div></div>';
+}
+async function daaPage(partner='B',demo=false){
+ await artworkReady;
+ const pB=prefixOf(partner),ei=partner.charCodeAt(0)-67;
+ const ca=partner==='B'?state.circA:(state.extraCircA[ei]||{}),cb=partner==='B'?state.circB:(state.extraCircB[ei]||{});
+ const impactA=daaVectorImpactData('A'),impactB=daaVectorImpactData(partner),sketch=daaVectorSketchData(partner);
+ const sigA=partner==='B'?state.sigA:state[pB+'sig_a'],sigB=partner==='B'?state.sigB:state[pB+'sig'];
+ const circRows=circText.map((t,i)=>{const n=i+1;return '<div class="daa-crow"><span><span class="boxx">'+daaMark(!!ca[n])+'</span> '+n+'</span><span class="ctxt">'+daaV(t)+'</span><span>'+n+' <span class="boxx">'+daaMark(!!cb[n])+'</span></span></div>';}).join('');
+ const css=[
+ '*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111}',
+ '.page{width:210mm;height:297mm;padding:5mm;background:#fff;overflow:hidden}',
+ '.daa-sheet{width:200mm;height:287mm;background:#fff;font-size:7.2pt;line-height:1.12;overflow:hidden}',
+ '.daa-title{font-size:18pt;font-weight:900;margin:0 0 2mm}',
+ '.daa-top{display:grid;grid-template-columns:1.05fr .5fr 1.45fr .95fr;border:1px solid #555}',
+ '.daa-box{border-right:1px solid #777;padding:1.15mm;min-height:11mm;overflow:hidden}.daa-box:last-child{border-right:0}',
+ '.daa-top2{display:grid;grid-template-columns:1.05fr 1.95fr;border:1px solid #777;border-top:0}.daa-top2>.daa-box{min-height:13mm}',
+ '.daa-label{font-size:7.4pt;font-weight:900}.val{font-weight:700}.lineval{font-weight:700}',
+ '.daa-main{display:grid;grid-template-columns:35% 30% 35%;border-left:1px solid #777;border-right:1px solid #777}',
+ '.daa-col{min-width:0;overflow:hidden}.daa-a{background:#edf8fd;border-right:4px solid #16a9df}.daa-b{background:#fffdeb;border-left:4px solid #f2e711}.daa-center{background:#fff}',
+ '.daa-side-head{font-size:14pt;text-align:center;font-weight:700;padding:1.15mm;background:#24aada}.daa-b .daa-side-head{background:#f4ea13}',
+ '.daa-sec{border-top:1px solid #777;padding:.9mm 1.25mm;overflow:hidden}.daa-sec h5{font-size:7.8pt;margin:0 0 .6mm;text-decoration:underline}.daa-sec small{font-size:5.4pt}',
+ '.daa-sec .row{margin:.26mm 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3.35mm}.daa-sec .row b{font-weight:500}',
+ '.daa-vehgrid{display:grid;grid-template-columns:1fr 1fr;gap:1mm}.minihead{background:rgba(0,0,0,.05);text-align:center;border:1px solid #aaa;padding:.35mm;font-size:6.7pt;font-weight:700}',
+ '.mini{padding:.45mm;border:1px solid #aaa;border-top:0;min-height:19mm;overflow:hidden}.mini b{font-weight:500}',
+ '.daa-circ-head{font-size:13.2pt;text-align:center;font-weight:800;padding:1mm;border-bottom:1px solid #777}',
+ '.daa-circ-sub{text-align:center;font-weight:800;font-size:7.2pt;padding:.8mm 1mm .35mm}',
+ '.daa-circ-list{padding:.1mm 1.2mm}.daa-crow{display:grid;grid-template-columns:7mm 1fr 7mm;gap:.45mm;align-items:center;min-height:5.35mm;font-size:6.65pt;text-align:center}.daa-crow .ctxt{text-align:center}',
+ '.boxx{display:inline-flex;width:4mm;height:4mm;border:1px solid #222;align-items:center;justify-content:center;font-weight:900;font-size:8pt;background:#fff}',
+ '.countrow{display:grid;grid-template-columns:1fr 1fr;gap:1mm;text-align:center;border-top:1px solid #777;padding:.8mm;font-weight:800}',
+ '.mandatory{font-weight:900;text-align:center;border-top:1px solid #777;padding:.8mm;font-size:6.8pt}.mandatory small{display:block;font-weight:500;font-style:italic}',
+ '.daa-lower{display:grid;grid-template-columns:16% 68% 16%;border:1px solid #777;border-top:0}',
+ '.impact-box{padding:.8mm;background:#edf8fd;border-right:4px solid #16a9df}.impact-box.b{background:#fffdeb;border-left:4px solid #f2e711;border-right:0}',
+ '.impact-box h5{font-size:7.1pt;margin:0 0 .7mm}.impact-print{width:100%;height:41mm;object-fit:contain;background:#fff;border:1px solid #bbb}',
+ '.damages-print{height:20mm;border-top:1px solid #777;padding-top:.8mm;overflow:hidden}',
+ '.sketch-box{padding:.8mm;background:#fff}.sketch-title{text-align:center;font-weight:800;border-bottom:1px solid #aaa;margin:-.8mm -.8mm .7mm;padding:.8mm}',
+ '.sketch-help{text-align:center;font-size:5.4pt;margin-bottom:.5mm}.sketch-print{width:100%;height:60mm;object-fit:contain;border:1px solid #ccc;background:#fff}',
+ '.obs-sign{display:grid;grid-template-columns:32% 36% 32%;border:1px solid #777;border-top:0}.obs{padding:.8mm;height:31mm;overflow:hidden;background:#edf8fd;border-right:4px solid #16a9df}.obs.b{background:#fffdeb;border-left:4px solid #f2e711;border-right:0}',
+ '.signs{padding:.8mm;text-align:center;height:31mm;overflow:hidden}.signs h5,.obs h5{margin:0 0 .7mm;font-size:7.4pt}.sigimgs{display:grid;grid-template-columns:1fr 1fr;gap:1mm}.sig-print{width:100%;height:22mm;object-fit:contain;border:1px solid #ccc;background:#fff}',
+ '.ab{display:flex;justify-content:space-between;font-size:14pt;font-weight:800;padding:0 2mm}.daa-foot{font-size:5pt;margin-top:.8mm;color:#333}',
+ '.draft{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%) rotate(-22deg);font-size:29pt;font-weight:900;color:rgba(170,20,20,.18);white-space:nowrap;pointer-events:none}'
+ ].join('');
+ const top='<div class="daa-title">DECLARACIÓN AMISTOSA DE ACCIDENTE</div>'+
+ '<div class="daa-top"><div class="daa-box"><span class="daa-label">1 Fecha del Accidente</span><br><b>'+daaV(dateText(state.acc_date))+'</b></div>'+
+ '<div class="daa-box"><span class="daa-label">Hora</span><br><b>'+daaV(state.acc_time)+'</b></div>'+
+ '<div class="daa-box"><span class="daa-label">2 Localización</span><br>Lugar <b>'+daaV(state.acc_place)+'</b><br>País <b>'+daaV(state.acc_country)+'</b></div>'+
+ '<div class="daa-box"><span class="daa-label">3 Víctima(s) incluso leve(s)</span><br>no <span class="boxx">'+daaMark(state.victims==='No')+'</span>&nbsp;&nbsp; sí <span class="boxx">'+daaMark(state.victims==='Sí')+'</span></div></div>'+
+ '<div class="daa-top2"><div class="daa-box"><span class="daa-label">4 Daños materiales</span><br>Vehículos distintos de A y B&nbsp; no <span class="boxx">'+daaMark(state.other_vehicles_damage!=='Sí')+'</span> sí <span class="boxx">'+daaMark(state.other_vehicles_damage==='Sí')+'</span><br>Objetos distintos al vehículo&nbsp; no <span class="boxx">'+daaMark(state.other_objects_damage!=='Sí')+'</span> sí <span class="boxx">'+daaMark(state.other_objects_damage==='Sí')+'</span></div>'+
+ '<div class="daa-box"><span class="daa-label">5 Testigos: nombre, dirección, tel.</span><br><b>'+daaV(state.witnesses)+'</b></div></div>';
+ const center='<div class="daa-col daa-center"><div class="daa-circ-head">12. CIRCUNSTANCIAS</div><div class="daa-circ-sub">Poner un aspa (x) en cada casilla que proceda para precisar el croquis</div><div class="daa-circ-list">'+circRows+'</div>'+
+ '<div class="countrow"><span>A: <b>'+Object.values(ca).filter(Boolean).length+'</b> casillas</span><span>'+daaV(partner)+': <b>'+Object.values(cb).filter(Boolean).length+'</b> casillas</span></div>'+
+ '<div class="mandatory">La firma de ambos conductores es obligatoria<small>No implica reconocimiento de responsabilidad.</small></div></div>';
+ const lower='<div class="daa-lower"><div class="impact-box"><h5>10 Indicar el punto de choque inicial</h5><img class="impact-print" src="'+impactA+'"><div class="damages-print"><b>11 Daños apreciados al vehículo A</b><br>'+daaV(state.a_damages)+'</div></div>'+
+ '<div class="sketch-box"><div class="sketch-title"><b>13 Croquis del Accidente</b> (en el momento de la colisión)</div><div class="sketch-help">Precisar situación, dirección por flechas de A y '+daaV(partner)+', posición en la colisión y señales.</div><img class="sketch-print" src="'+sketch+'"></div>'+
+ '<div class="impact-box b"><h5>10 Indicar el punto de choque inicial</h5><img class="impact-print" src="'+impactB+'"><div class="damages-print"><b>11 Daños apreciados al vehículo '+daaV(partner)+'</b><br>'+daaV(state[pB+'damages'])+'</div></div></div>'+
+ '<div class="obs-sign"><div class="obs"><h5>14 Observaciones</h5>'+daaV(state.a_observations)+'</div><div class="signs"><h5>15 Firma de los conductores</h5><div class="sigimgs"><img class="sig-print" '+(sigA?'src="'+sigA+'"':'')+'><img class="sig-print" '+(sigB?'src="'+sigB+'"':'')+'></div><div class="ab"><span>A</span><span>'+daaV(partner)+'</span></div></div><div class="obs b"><h5>14 Observaciones</h5>'+daaV(state[pB+'observations'])+'</div></div>'+
+ '<div class="daa-foot">Copia digital generada a partir de los datos consignados por los implicados. Destino corporativo: flota@allzonelogistics.com.</div>';
+ const watermark=(!sigA||!sigB||demo)?'<div class="draft">'+(demo?'SIMULACIÓN · DATOS FICTICIOS':'BORRADOR · FALTAN FIRMAS')+'</div>':'';
+ const body='<div xmlns="http://www.w3.org/1999/xhtml" class="page"><style>'+css+'</style><div class="daa-sheet" style="position:relative">'+top+'<div class="daa-main">'+daaSideHtml('A','a_','daa-a')+center+daaSideHtml(partner,pB,'daa-b')+'</div>'+lower+watermark+'</div></div>';
+ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="2382" height="3369" viewBox="0 0 794 1123"><foreignObject x="0" y="0" width="794" height="1123">'+body+'</foreignObject></svg>';
+ const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob);
+ let im;
+ try{im=await new Promise((resolve,reject)=>{const pic=new Image();pic.onload=()=>resolve(pic);pic.onerror=()=>reject(new Error('No se pudo renderizar el DAA vectorial.'));pic.src=url;});}
+ finally{URL.revokeObjectURL(url);}
+ const canvas=document.createElement('canvas');canvas.width=2382;canvas.height=3369;const x=canvas.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,canvas.width,canvas.height);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(im,0,0,canvas.width,canvas.height);
+ return {canvas,overflow:[]};
+}
 async function photoPages(partner=null){const ts=photoTargets().filter(t=>photos.has(t.key)&&(!partner||t.key==='a_damage'||t.key==='a_plate'||t.key===prefixOf(partner).slice(0,-1)+'_damage'||t.key===prefixOf(partner).slice(0,-1)+'_plate'));const pages=[];for(let i=0;i<ts.length;i+=2){const c=blankPage('Anexo fotográfico',dateText(state.acc_date)+' · A: '+(state.a_plate||'')+' · '+(state.acc_place||'')),x=c.getContext('2d');for(let j=0;j<2&&i+j<ts.length;j++){const t=ts[i+j],p=photos.get(t.key),im=await loadPicture(p.data),y=365+j*920;x.fillStyle='#e9f3ef';x.fillRect(82,y,1490,67);x.fillStyle='#22483d';x.font='bold 29px Arial';x.fillText(t.label,105,y+43);const fit=Math.min(1450/im.naturalWidth,725/im.naturalHeight),w=im.naturalWidth*fit,h=im.naturalHeight*fit;x.drawImage(im,102+(1450-w)/2,y+94+(725-h)/2,w,h);x.font='23px Arial';x.fillStyle='#516b61';x.fillText('Foto '+(i+j+1)+' de '+ts.length+' · '+(p.source==='camera'?'Cámara':'Biblioteca'),105,y+864);}pages.push(await pageRecord(c));c.width=c.height=1;await new Promise(r=>setTimeout(r,0));}return pages;}
 async function notesPage(title,rows){const pages=[];let c=blankPage(title,'Datos adicionales del accidente'),x=c.getContext('2d'),y=340;for(const [label,value] of rows){if(!value)continue;if(y>2040){pages.push(await pageRecord(c));c=blankPage(title+' (continuación)','');x=c.getContext('2d');y=340;}x.fillStyle='#173d32';x.font='bold 28px Arial';x.fillText(label,86,y);x.font='27px Arial';x.fillStyle='#243e34';const n=wrapText(x,value,86,y+42,1470,37,40);y+=82+n*37;}pages.push(await pageRecord(c));return pages;}
 async function buildDocument(mode='pair',partner='B',demo=false){await artworkReady;await Promise.all([...photoJobs.values()]);const pages=[];if(mode==='photos'){pages.push(...await photoPages());if(!pages.length)throw new Error('Añade al menos una foto y espera a ver la miniatura.');}

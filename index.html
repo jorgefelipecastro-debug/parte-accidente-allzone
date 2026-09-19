@@ -354,7 +354,7 @@ async function daaPage(partner='B',demo=false){
  const ca=partner==='B'?state.circA:(state.extraCircA[ei]||{}),cb=partner==='B'?state.circB:(state.extraCircB[ei]||{});
  const impactA=daaVectorImpactData('A'),impactB=daaVectorImpactData(partner),sketch=daaVectorSketchData(partner);
  const sigA=partner==='B'?state.sigA:state[pB+'sig_a'],sigB=partner==='B'?state.sigB:state[pB+'sig'];
- const circRows=circText.map((t,i)=>{const n=i+1;return '<div class="daa-crow"><span><span class="boxx">'+daaMark(!!ca[n])+'</span> '+n+'</span><span class="ctxt">'+daaV(t)+'</span><span>'+n+' <span class="boxx">'+daaMark(!!cb[n])+'</span></span></div>';}).join('');
+ const circRows=circs.map((t,i)=>{const n=i+1;return '<div class="daa-crow"><span><span class="boxx">'+daaMark(!!ca[n])+'</span> '+n+'</span><span class="ctxt">'+daaV(t)+'</span><span>'+n+' <span class="boxx">'+daaMark(!!cb[n])+'</span></span></div>';}).join('');
  const css=[
  '*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111}',
  '.page{width:210mm;height:297mm;padding:5mm;background:#fff;overflow:hidden}',

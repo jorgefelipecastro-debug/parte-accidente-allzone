@@ -332,10 +332,8 @@ function wrapText(x,text,left,top,width,lineHeight,maxLines=100){const result=[]
 function dateText(v){return /^\d{4}-\d\d-\d\d$/.test(v||'')?v.split('-').reverse().join('/'):v||'';}
 
 function daaVectorImpactData(side){
- // El DAA final reutiliza exactamente el mismo lienzo y coordenadas
- // que la pantalla donde el usuario marca los impactos: 320 x 230.
- // De este modo no se recalculan ni desplazan los puntos.
- const cv=document.createElement('canvas');cv.width=320;cv.height=230;const q=cv.getContext('2d');
+ // Mismo lienzo exacto que usa la pantalla de marcado: 320 x 290.
+ const cv=document.createElement('canvas');cv.width=320;cv.height=290;const q=cv.getContext('2d');
  q.fillStyle='#fff';q.fillRect(0,0,cv.width,cv.height);
  technicalVehicle(q,state[prefixOf(side)+'vehicle_type']||'Coche',cv.width,cv.height,side);
  const key=(side==='A'||side==='B')?'impacts'+side:prefixOf(side)+'impacts';
@@ -387,67 +385,215 @@ function daaSideHtml(side,p,cls){
 async function daaPage(partner='B',demo=false){
  await artworkReady;
  const pB=prefixOf(partner),ei=partner.charCodeAt(0)-67;
- const ca=partner==='B'?state.circA:(state.extraCircA[ei]||{}),cb=partner==='B'?state.circB:(state.extraCircB[ei]||{});
- const impactA=daaVectorImpactData('A'),impactB=daaVectorImpactData(partner),sketch=daaVectorSketchData(partner);
- const sigA=partner==='B'?state.sigA:state[pB+'sig_a'],sigB=partner==='B'?state.sigB:state[pB+'sig'];
- const circRows=circs.map((t,i)=>{const n=i+1;return '<div class="daa-crow"><span><span class="boxx">'+daaMark(!!ca[n])+'</span> '+n+'</span><span class="ctxt">'+daaV(t)+'</span><span>'+n+' <span class="boxx">'+daaMark(!!cb[n])+'</span></span></div>';}).join('');
- const css=[
- '*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111}',
- '.page{width:210mm;height:297mm;padding:5mm;background:#fff;overflow:hidden}',
- '.daa-sheet{width:200mm;height:287mm;background:#fff;font-size:7.2pt;line-height:1.12;overflow:hidden}',
- '.daa-title{font-size:18pt;font-weight:900;margin:0 0 2mm}',
- '.daa-top{display:grid;grid-template-columns:1.05fr .5fr 1.45fr .95fr;border:1px solid #555}',
- '.daa-box{border-right:1px solid #777;padding:1.15mm;min-height:11mm;overflow:hidden}.daa-box:last-child{border-right:0}',
- '.daa-top2{display:grid;grid-template-columns:1.05fr 1.95fr;border:1px solid #777;border-top:0}.daa-top2>.daa-box{min-height:13mm}',
- '.daa-label{font-size:7.4pt;font-weight:900}.val{font-weight:700}.lineval{font-weight:700}',
- '.daa-main{display:grid;grid-template-columns:35% 30% 35%;border-left:1px solid #777;border-right:1px solid #777}',
- '.daa-col{min-width:0;overflow:hidden}.daa-a{background:#edf8fd;border-right:4px solid #16a9df}.daa-b{background:#fffdeb;border-left:4px solid #f2e711}.daa-center{background:#fff}',
- '.daa-side-head{font-size:14pt;text-align:center;font-weight:700;padding:1.15mm;background:#24aada}.daa-b .daa-side-head{background:#f4ea13}',
- '.daa-sec{border-top:1px solid #777;padding:.9mm 1.25mm;overflow:hidden}.daa-sec h5{font-size:7.8pt;margin:0 0 .6mm;text-decoration:underline}.daa-sec small{font-size:5.4pt}',
- '.daa-sec .row{margin:.26mm 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:3.35mm}.daa-sec .row b{font-weight:500}',
- '.daa-vehgrid{display:grid;grid-template-columns:1fr 1fr;gap:1mm}.minihead{background:rgba(0,0,0,.05);text-align:center;border:1px solid #aaa;padding:.35mm;font-size:6.7pt;font-weight:700}',
- '.mini{padding:.45mm;border:1px solid #aaa;border-top:0;min-height:19mm;overflow:hidden}.mini b{font-weight:500}',
- '.daa-circ-head{font-size:13.2pt;text-align:center;font-weight:800;padding:1mm;border-bottom:1px solid #777}',
- '.daa-circ-sub{text-align:center;font-weight:800;font-size:7.2pt;padding:.8mm 1mm .35mm}',
- '.daa-circ-list{padding:.1mm 1.2mm}.daa-crow{display:grid;grid-template-columns:7mm 1fr 7mm;gap:.45mm;align-items:center;min-height:5.35mm;font-size:6.65pt;text-align:center}.daa-crow .ctxt{text-align:center}',
- '.boxx{display:inline-flex;width:4mm;height:4mm;border:1px solid #222;align-items:center;justify-content:center;font-weight:900;font-size:8pt;background:#fff}',
- '.countrow{display:grid;grid-template-columns:1fr 1fr;gap:1mm;text-align:center;border-top:1px solid #777;padding:.8mm;font-weight:800}',
- '.mandatory{font-weight:900;text-align:center;border-top:1px solid #777;padding:.8mm;font-size:6.8pt}.mandatory small{display:block;font-weight:500;font-style:italic}',
- '.daa-lower{display:grid;grid-template-columns:16% 68% 16%;border:1px solid #777;border-top:0}',
- '.impact-box{padding:.8mm;background:#edf8fd;border-right:4px solid #16a9df}.impact-box.b{background:#fffdeb;border-left:4px solid #f2e711;border-right:0}',
- '.impact-box h5{font-size:7.1pt;margin:0 0 .7mm}.impact-print{width:100%;height:41mm;object-fit:contain;background:#fff;border:1px solid #bbb}',
- '.damages-print{height:20mm;border-top:1px solid #777;padding-top:.8mm;overflow:hidden}',
- '.sketch-box{padding:.8mm;background:#fff}.sketch-title{text-align:center;font-weight:800;border-bottom:1px solid #aaa;margin:-.8mm -.8mm .7mm;padding:.8mm}',
- '.sketch-help{text-align:center;font-size:5.4pt;margin-bottom:.5mm}.sketch-print{width:100%;height:60mm;object-fit:contain;border:1px solid #ccc;background:#fff}',
- '.obs-sign{display:grid;grid-template-columns:32% 36% 32%;border:1px solid #777;border-top:0}.obs{padding:.8mm;height:31mm;overflow:hidden;background:#edf8fd;border-right:4px solid #16a9df}.obs.b{background:#fffdeb;border-left:4px solid #f2e711;border-right:0}',
- '.signs{padding:.8mm;text-align:center;height:31mm;overflow:hidden}.signs h5,.obs h5{margin:0 0 .7mm;font-size:7.4pt}.sigimgs{display:grid;grid-template-columns:1fr 1fr;gap:1mm}.sig-print{width:100%;height:22mm;object-fit:contain;border:1px solid #ccc;background:#fff}',
- '.ab{display:flex;justify-content:space-between;font-size:14pt;font-weight:800;padding:0 2mm}.daa-foot{font-size:5pt;margin-top:.8mm;color:#333}',
- '.draft{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%) rotate(-22deg);font-size:29pt;font-weight:900;color:rgba(170,20,20,.18);white-space:nowrap;pointer-events:none}'
- ].join('');
- const top='<div class="daa-title">DECLARACIÓN AMISTOSA DE ACCIDENTE</div>'+
- '<div class="daa-top"><div class="daa-box"><span class="daa-label">1 Fecha del Accidente</span><br><b>'+daaV(dateText(state.acc_date))+'</b></div>'+
- '<div class="daa-box"><span class="daa-label">Hora</span><br><b>'+daaV(state.acc_time)+'</b></div>'+
- '<div class="daa-box"><span class="daa-label">2 Localización</span><br>Lugar <b>'+daaV(state.acc_place)+'</b><br>País <b>'+daaV(state.acc_country)+'</b></div>'+
- '<div class="daa-box"><span class="daa-label">3 Víctima(s) incluso leve(s)</span><br>no <span class="boxx">'+daaMark(state.victims==='No')+'</span>&nbsp;&nbsp; sí <span class="boxx">'+daaMark(state.victims==='Sí')+'</span></div></div>'+
- '<div class="daa-top2"><div class="daa-box"><span class="daa-label">4 Daños materiales</span><br>Vehículos distintos de A y B&nbsp; no <span class="boxx">'+daaMark(state.other_vehicles_damage!=='Sí')+'</span> sí <span class="boxx">'+daaMark(state.other_vehicles_damage==='Sí')+'</span><br>Objetos distintos al vehículo&nbsp; no <span class="boxx">'+daaMark(state.other_objects_damage!=='Sí')+'</span> sí <span class="boxx">'+daaMark(state.other_objects_damage==='Sí')+'</span></div>'+
- '<div class="daa-box"><span class="daa-label">5 Testigos: nombre, dirección, tel.</span><br><b>'+daaV(state.witnesses)+'</b></div></div>';
- const center='<div class="daa-col daa-center"><div class="daa-circ-head">12. CIRCUNSTANCIAS</div><div class="daa-circ-sub">Poner un aspa (x) en cada casilla que proceda para precisar el croquis</div><div class="daa-circ-list">'+circRows+'</div>'+
- '<div class="countrow"><span>A: <b>'+Object.values(ca).filter(Boolean).length+'</b> casillas</span><span>'+daaV(partner)+': <b>'+Object.values(cb).filter(Boolean).length+'</b> casillas</span></div>'+
- '<div class="mandatory">La firma de ambos conductores es obligatoria<small>No implica reconocimiento de responsabilidad.</small></div></div>';
- const lower='<div class="daa-lower"><div class="impact-box"><h5>10 Indicar el punto de choque inicial</h5><img class="impact-print" src="'+impactA+'"><div class="damages-print"><b>11 Daños apreciados al vehículo A</b><br>'+daaV(state.a_damages)+'</div></div>'+
- '<div class="sketch-box"><div class="sketch-title"><b>13 Croquis del Accidente</b> (en el momento de la colisión)</div><div class="sketch-help">Precisar situación, dirección por flechas de A y '+daaV(partner)+', posición en la colisión y señales.</div><img class="sketch-print" src="'+sketch+'"></div>'+
- '<div class="impact-box b"><h5>10 Indicar el punto de choque inicial</h5><img class="impact-print" src="'+impactB+'"><div class="damages-print"><b>11 Daños apreciados al vehículo '+daaV(partner)+'</b><br>'+daaV(state[pB+'damages'])+'</div></div></div>'+
- '<div class="obs-sign"><div class="obs"><h5>14 Observaciones</h5>'+daaV(state.a_observations)+'</div><div class="signs"><h5>15 Firma de los conductores</h5><div class="sigimgs"><img class="sig-print" '+(sigA?'src="'+sigA+'"':'')+'><img class="sig-print" '+(sigB?'src="'+sigB+'"':'')+'></div><div class="ab"><span>A</span><span>'+daaV(partner)+'</span></div></div><div class="obs b"><h5>14 Observaciones</h5>'+daaV(state[pB+'observations'])+'</div></div>'+
- '<div class="daa-foot">Copia digital generada a partir de los datos consignados por los implicados. Destino corporativo: flota@allzonelogistics.com.</div>';
- const watermark=(!sigA||!sigB||demo)?'<div class="draft">'+(demo?'SIMULACIÓN · DATOS FICTICIOS':'BORRADOR · FALTAN FIRMAS')+'</div>':'';
- const body='<div xmlns="http://www.w3.org/1999/xhtml" class="page"><style>'+css+'</style><div class="daa-sheet" style="position:relative">'+top+'<div class="daa-main">'+daaSideHtml('A','a_','daa-a')+center+daaSideHtml(partner,pB,'daa-b')+'</div>'+lower+watermark+'</div></div>';
- const svg='<svg xmlns="http://www.w3.org/2000/svg" width="2382" height="3369" viewBox="0 0 794 1123"><foreignObject x="0" y="0" width="794" height="1123">'+body+'</foreignObject></svg>';
- const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob);
- let im;
- try{im=await new Promise((resolve,reject)=>{const pic=new Image();pic.onload=()=>resolve(pic);pic.onerror=()=>reject(new Error('No se pudo renderizar el DAA vectorial.'));pic.src=url;});}
- finally{URL.revokeObjectURL(url);}
- const canvas=document.createElement('canvas');canvas.width=2382;canvas.height=3369;const x=canvas.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,canvas.width,canvas.height);x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(im,0,0,canvas.width,canvas.height);
- return {canvas,overflow:[]};
+ const ca=partner==='B'?state.circA:(state.extraCircA[ei]||{});
+ const cb=partner==='B'?state.circB:(state.extraCircB[ei]||{});
+ const sigA=partner==='B'?state.sigA:state[pB+'sig_a'];
+ const sigB=partner==='B'?state.sigB:state[pB+'sig'];
+
+ const [impactA,impactB,sketch,sigAImg,sigBImg]=await Promise.all([
+  loadPicture(daaVectorImpactData('A')),
+  loadPicture(daaVectorImpactData(partner)),
+  loadPicture(daaVectorSketchData(partner)),
+  sigA?loadPicture(sigA):Promise.resolve(null),
+  sigB?loadPicture(sigB):Promise.resolve(null)
+ ]);
+
+ const canvas=document.createElement('canvas');
+ canvas.width=2382;canvas.height=3369;
+ const x=canvas.getContext('2d',{alpha:false});
+ if(!x)throw new Error('No se pudo crear el lienzo del parte.');
+ x.fillStyle='#fff';x.fillRect(0,0,canvas.width,canvas.height);
+ x.save();x.scale(3,3);
+
+ const ink='#111',line='#777',aBg='#edf8fd',aHead='#24aada',bBg='#fffdeb',bHead='#f4ea13';
+ const overflow=[];
+ const rect=(l,t,w,h,fill='#fff',stroke=line,lw=1)=>{x.fillStyle=fill;x.fillRect(l,t,w,h);x.strokeStyle=stroke;x.lineWidth=lw;x.strokeRect(l,t,w,h);};
+ const txt=(v,l,t,size=7,weight='400',align='left',color=ink)=>{
+  x.save();x.fillStyle=color;x.font=weight+' '+size+'px Arial';x.textAlign=align;x.textBaseline='top';x.fillText(String(v??''),l,t);x.restore();
+ };
+ const fit=(v,l,t,w,size=7,weight='400',align='left',color=ink)=>{
+  v=String(v??'');if(!v)return;
+  x.save();x.fillStyle=color;x.textAlign=align;x.textBaseline='top';
+  let s=size;x.font=weight+' '+s+'px Arial';
+  while(x.measureText(v).width>w&&s>4.8){s-=.2;x.font=weight+' '+s+'px Arial';}
+  let out=v;
+  if(x.measureText(out).width>w){
+   while(out&&x.measureText(out+'…').width>w)out=out.slice(0,-1);
+   out+='…';
+  }
+  x.fillText(out,l,t);x.restore();
+ };
+ const wrap=(v,l,t,w,lineH=9,maxLines=3,size=6,weight='400',color=ink)=>{
+  x.save();x.fillStyle=color;x.font=weight+' '+size+'px Arial';x.textAlign='left';x.textBaseline='top';
+  const words=String(v??'').split(/\s+/).filter(Boolean);let lineText='',lines=[];
+  for(const word of words){
+   const test=lineText?lineText+' '+word:word;
+   if(x.measureText(test).width>w&&lineText){lines.push(lineText);lineText=word;}else lineText=test;
+  }
+  if(lineText)lines.push(lineText);
+  lines.slice(0,maxLines).forEach((s,i)=>x.fillText(s,l,t+i*lineH));
+  x.restore();
+  return lines.length;
+ };
+ const mark=(l,t,on)=>{rect(l,t,11,11,'#fff','#222',.8);if(on){x.save();x.strokeStyle='#111';x.lineWidth=1.4;x.beginPath();x.moveTo(l+2,t+2);x.lineTo(l+9,t+9);x.moveTo(l+9,t+2);x.lineTo(l+2,t+9);x.stroke();x.restore();}};
+ const contain=(im,l,t,w,h)=>{
+  if(!im)return;
+  const iw=im.naturalWidth||im.width,ih=im.naturalHeight||im.height;
+  if(!iw||!ih)return;
+  const s=Math.min(w/iw,h/ih),dw=iw*s,dh=ih*s;
+  x.drawImage(im,l+(w-dw)/2,t+(h-dh)/2,dw,dh);
+ };
+ const divider=(y,l,w)=>{x.strokeStyle=line;x.lineWidth=.7;x.beginPath();x.moveTo(l,y);x.lineTo(l+w,y);x.stroke();};
+ const field=(label,value,l,t,w,lh=11)=>{
+  txt(label,l,t,5.5,'700');
+  fit(value,l+Math.min(62,w*.42),t,w-Math.min(64,w*.44),6,'400');
+  return t+lh;
+ };
+
+ // Encabezado
+ txt('DECLARACIÓN AMISTOSA DE ACCIDENTE',20,14,18,'900');
+ const topY=40;
+ rect(20,topY,160,42);rect(180,topY,80,42);rect(260,topY,300,42);rect(560,topY,214,42);
+ txt('1 Fecha del accidente',25,45,7,'700');fit(dateText(state.acc_date),25,59,145,9,'700');
+ txt('Hora',185,45,7,'700');fit(state.acc_time,185,59,65,9,'700');
+ txt('2 Localización',265,45,7,'700');fit(state.acc_place,265,58,285,6.5,'700');fit(state.acc_country,265,70,285,6);
+ txt('3 Víctima(s), incluso leve(s)',565,45,7,'700');txt('No',566,62,6);mark(586,60,state.victims==='No');txt('Sí',612,62,6);mark(628,60,state.victims==='Sí');
+
+ rect(20,82,365,54);rect(385,82,389,54);
+ txt('4 Daños materiales',25,87,7,'700');
+ txt('Vehículos distintos de A y B',25,101,6);txt('No',190,101,6);mark(208,99,state.other_vehicles_damage!=='Sí');txt('Sí',228,101,6);mark(244,99,state.other_vehicles_damage==='Sí');
+ txt('Objetos distintos al vehículo',25,116,6);txt('No',190,116,6);mark(208,114,state.other_objects_damage!=='Sí');txt('Sí',228,116,6);mark(244,114,state.other_objects_damage==='Sí');
+ txt('5 Testigos: nombre, dirección, teléfono',390,87,7,'700');fit(state.witnesses,390,103,374,6.2);
+
+ const mainY=136,mainH=532,leftX=20,leftW=260,centerX=280,centerW=234,rightX=514,rightW=260;
+
+ function drawSide(side,p,l,w,bg,head){
+  rect(l,mainY,w,mainH,bg,line,1);
+  x.fillStyle=head;x.fillRect(l,mainY,w,32);
+  txt('Vehículo '+side,l+w/2,mainY+7,13,'700','center');
+
+  let y=mainY+32;
+  const sec=(title,h)=>{
+   divider(y,l,w);txt(title,l+6,y+5,7,'700');const sy=y;y+=18;return {sy,h};
+  };
+  const v=n=>state[p+n]||'';
+
+  let s=sec('6 Asegurado (véase póliza de seguro)',96);
+  y=field('Nombre:',v('insured_name'),l+6,y,w-12);
+  y=field('Apellidos:',v('insured_surname'),l+6,y,w-12);
+  y=field('Dirección:',v('insured_address'),l+6,y,w-12);
+  y=field('C.P.:',v('insured_postal'),l+6,y,110);
+  fit('País: '+v('insured_country'),l+122,y-11,w-128,6);
+  y=field('Tel./E-mail:',v('insured_contact'),l+6,y,w-12);
+  y=s.sy+s.h;
+
+  s=sec('7 Vehículo',90);
+  y=field('Tipo:',v('vehicle_type'),l+6,y,w-12);
+  y=field('Marca/modelo:',v('vehicle_model'),l+6,y,w-12);
+  y=field('Matrícula:',v('plate'),l+6,y,w-12);
+  y=field('País matrícula:',v('plate_country'),l+6,y,w-12);
+  y=field('Remolque:',v('trailer_plate'),l+6,y,w-12);
+  fit('País remolque: '+v('trailer_country'),l+6,y,w-12,5.8);
+  y=s.sy+s.h;
+
+  s=sec('8 Aseguradora (véase póliza)',164);
+  y=field('Nombre:',v('insurer'),l+6,y,w-12);
+  y=field('Póliza:',v('policy'),l+6,y,w-12);
+  y=field('Carta Verde:',v('green_card'),l+6,y,w-12);
+  y=field('Válida desde:',dateText(v('green_from')),l+6,y,w-12);
+  y=field('Hasta:',dateText(v('green_to')),l+6,y,w-12);
+  y=field('Agencia:',v('agency'),l+6,y,w-12);
+  y=field('Nombre:',v('agency_name'),l+6,y,w-12);
+  y=field('Dirección:',v('agency_address'),l+6,y,w-12);
+  y=field('País:',v('agency_country'),l+6,y,w-12);
+  y=field('Tel./E-mail:',v('agency_contact'),l+6,y,w-12);
+  fit('Daños propios: '+v('own_damage'),l+6,y,w-12,5.8,'700');
+  y=s.sy+s.h;
+
+  s=sec('9 Conductor (ver permiso de conducir)',150);
+  y=field('Nombre:',v('driver_name'),l+6,y,w-12);
+  y=field('Apellidos:',v('driver_surname'),l+6,y,w-12);
+  y=field('Nacimiento:',dateText(v('driver_birth')),l+6,y,w-12);
+  y=field('Dirección:',v('driver_address'),l+6,y,w-12);
+  y=field('País:',v('driver_country'),l+6,y,w-12);
+  y=field('Tel./E-mail:',v('driver_contact'),l+6,y,w-12);
+  y=field('Permiso nº:',v('license'),l+6,y,w-12);
+  y=field('Categoría:',v('license_category'),l+6,y,w-12);
+  fit('Válido hasta: '+dateText(v('license_until')),l+6,y,w-12,5.8);
+ }
+
+ drawSide('A','a_',leftX,leftW,aBg,aHead);
+ drawSide(partner,pB,rightX,rightW,bBg,bHead);
+
+ // Circunstancias
+ rect(centerX,mainY,centerW,mainH,'#fff',line,1);
+ txt('12. CIRCUNSTANCIAS',centerX+centerW/2,mainY+7,12,'800','center');
+ wrap('Marcar con una X las casillas que correspondan a cada vehículo.',centerX+10,mainY+27,centerW-20,8,2,5.5,'700');
+ let cy=mainY+49;
+ for(let i=0;i<circs.length;i++){
+  const n=i+1;
+  mark(centerX+8,cy+3,!!ca[n]);txt(n,centerX+22,cy+4,5.5,'700');
+  mark(centerX+centerW-19,cy+3,!!cb[n]);txt(n,centerX+centerW-31,cy+4,5.5,'700');
+  wrap(circs[i],centerX+38,cy+1,centerW-76,7,2,5.15,'400');
+  divider(cy+24,centerX,centerW);
+  cy+=24;
+ }
+ txt('A: '+Object.values(ca).filter(Boolean).length+' casillas',centerX+10,mainY+464,6,'700');
+ txt(partner+': '+Object.values(cb).filter(Boolean).length+' casillas',centerX+centerW-10,mainY+464,6,'700','right');
+ divider(mainY+483,centerX,centerW);
+ txt('La firma de ambos conductores es obligatoria',centerX+centerW/2,mainY+490,6.1,'800','center');
+ txt('No implica reconocimiento de responsabilidad.',centerX+centerW/2,mainY+503,5.3,'400','center');
+
+ // Impactos y croquis
+ const lowerY=668,lowerH=250,impactW=135,sketchX=155,sketchW=484,rightImpactX=639;
+ rect(20,lowerY,impactW,lowerH,aBg,line,1);
+ rect(sketchX,lowerY,sketchW,lowerH,'#fff',line,1);
+ rect(rightImpactX,lowerY,impactW,lowerH,bBg,line,1);
+
+ wrap('10 Indicar el punto de choque inicial y los impactos adicionales',26,lowerY+6,impactW-12,8,3,5.4,'700');
+ wrap('10 Indicar el punto de choque inicial y los impactos adicionales',rightImpactX+6,lowerY+6,impactW-12,8,3,5.4,'700');
+ rect(27,lowerY+31,121,140,'#fff','#bbb',.7);
+ rect(rightImpactX+7,lowerY+31,121,140,'#fff','#bbb',.7);
+ contain(impactA,29,lowerY+33,117,136);
+ contain(impactB,rightImpactX+9,lowerY+33,117,136);
+ divider(lowerY+176,20,impactW);divider(lowerY+176,rightImpactX,impactW);
+ txt('11 Daños apreciados A',26,lowerY+182,6,'700');
+ wrap(state.a_damages,26,lowerY+195,impactW-12,9,5,5.6);
+ txt('11 Daños apreciados '+partner,rightImpactX+6,lowerY+182,6,'700');
+ wrap(state[pB+'damages'],rightImpactX+6,lowerY+195,impactW-12,9,5,5.6);
+
+ txt('13 Croquis del Accidente',sketchX+sketchW/2,lowerY+7,8,'800','center');
+ txt('(en el momento de la colisión)',sketchX+sketchW/2,lowerY+19,5.5,'400','center');
+ rect(sketchX+8,lowerY+32,sketchW-16,lowerH-42,'#fff','#ccc',.7);
+ contain(sketch,sketchX+10,lowerY+34,sketchW-20,lowerH-46);
+
+ // Observaciones y firmas
+ const obsY=918,obsH=150,obsW=235,signX=255,signW=284,rightObsX=539;
+ rect(20,obsY,obsW,obsH,aBg,line,1);
+ rect(signX,obsY,signW,obsH,'#fff',line,1);
+ rect(rightObsX,obsY,235,obsH,bBg,line,1);
+ txt('14 Observaciones A',26,obsY+7,7,'700');
+ wrap(state.a_observations,26,obsY+23,obsW-12,10,10,6);
+ txt('14 Observaciones '+partner,rightObsX+6,obsY+7,7,'700');
+ wrap(state[pB+'observations'],rightObsX+6,obsY+23,223,10,10,6);
+
+ txt('15 Firma de los conductores',signX+signW/2,obsY+7,7.5,'700','center');
+ rect(signX+10,obsY+25,126,92,'#fff','#ccc',.7);
+ rect(signX+148,obsY+25,126,92,'#fff','#ccc',.7);
+ contain(sigAImg,signX+13,obsY+28,120,86);
+ contain(sigBImg,signX+151,obsY+28,120,86);
+ txt('A',signX+73,obsY+122,11,'800','center');
+ txt(partner,signX+211,obsY+122,11,'800','center');
+
+ txt('Copia digital generada a partir de los datos consignados por los implicados. Destino corporativo: flota@allzonelogistics.com.',20,1082,5.2,'400');
+
+ if(!sigA||!sigB||demo){
+  x.save();x.globalAlpha=.22;x.fillStyle='#b2211a';x.font='900 30px Arial';x.textAlign='center';x.translate(397,560);x.rotate(-.38);
+  x.fillText(demo?'SIMULACIÓN · DATOS FICTICIOS':'BORRADOR · FALTAN FIRMAS',0,0);x.restore();
+ }
+
+ x.restore();
+ return {canvas,overflow};
 }
 async function photoPages(partner=null){const ts=photoTargets().filter(t=>photos.has(t.key)&&(!partner||t.key==='a_damage'||t.key==='a_plate'||t.key===prefixOf(partner).slice(0,-1)+'_damage'||t.key===prefixOf(partner).slice(0,-1)+'_plate'));const pages=[];for(let i=0;i<ts.length;i+=2){const c=blankPage('Anexo fotográfico',dateText(state.acc_date)+' · A: '+(state.a_plate||'')+' · '+(state.acc_place||'')),x=c.getContext('2d');for(let j=0;j<2&&i+j<ts.length;j++){const t=ts[i+j],p=photos.get(t.key),im=await loadPicture(p.data),y=365+j*920;x.fillStyle='#e9f3ef';x.fillRect(82,y,1490,67);x.fillStyle='#22483d';x.font='bold 29px Arial';x.fillText(t.label,105,y+43);const fit=Math.min(1450/im.naturalWidth,725/im.naturalHeight),w=im.naturalWidth*fit,h=im.naturalHeight*fit;x.drawImage(im,102+(1450-w)/2,y+94+(725-h)/2,w,h);x.font='23px Arial';x.fillStyle='#516b61';x.fillText('Foto '+(i+j+1)+' de '+ts.length+' · '+(p.source==='camera'?'Cámara':'Biblioteca'),105,y+864);}pages.push(await pageRecord(c));c.width=c.height=1;await new Promise(r=>setTimeout(r,0));}return pages;}
 async function notesPage(title,rows){const pages=[];let c=blankPage(title,'Datos adicionales del accidente'),x=c.getContext('2d'),y=340;for(const [label,value] of rows){if(!value)continue;if(y>2040){pages.push(await pageRecord(c));c=blankPage(title+' (continuación)','');x=c.getContext('2d');y=340;}x.fillStyle='#173d32';x.font='bold 28px Arial';x.fillText(label,86,y);x.font='27px Arial';x.fillStyle='#243e34';const n=wrapText(x,value,86,y+42,1470,37,40);y+=82+n*37;}pages.push(await pageRecord(c));return pages;}

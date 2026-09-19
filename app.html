@@ -384,216 +384,133 @@ function daaSideHtml(side,p,cls){
 }
 async function daaPage(partner='B',demo=false){
  await artworkReady;
- const pB=prefixOf(partner),ei=partner.charCodeAt(0)-67;
+ const template=await templateReady;
+ const c=document.createElement('canvas');
+ // Misma plantilla clásica anterior, pero renderizada a 4x y en PDF sin pérdida.
+ const DAA_W=542,DAA_H=767,DAA_SCALE=4;
+ c.width=DAA_W*DAA_SCALE;c.height=DAA_H*DAA_SCALE;
+ const x=c.getContext('2d',{alpha:false});
+ x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+ x.scale(DAA_SCALE,DAA_SCALE);
+ x.imageSmoothingEnabled=true;
+ x.imageSmoothingQuality='high';
+ // Conserva exactamente el aspecto anterior. El pequeño aumento de contraste
+ // solo actúa sobre el fondo rasterizado para mejorar su lectura en móvil/PDF.
+ try{x.filter='contrast(1.10) saturate(1.02)';}catch(e){}
+ x.drawImage(template,0,0,DAA_W,DAA_H);
+ try{x.filter='none';}catch(e){}
+ x.translate(-21,-8);
+ x.fillStyle='#15251e';
+ const overflow=[];
+ const put=(val,left,top,w,h=9,size=5.9,label='')=>{
+  val=String(val??'');if(!val)return;
+  x.font=size+'px Arial';
+  while(x.measureText(val).width>w&&size>4.8){size-=.15;x.font=size+'px Arial';}
+  if(x.measureText(val).width>w){
+   overflow.push((label||'Dato')+': '+val);
+   let s=val;while(s&&x.measureText(s+'…').width>w)s=s.slice(0,-1);val=s+'…';
+  }
+  x.fillText(val,left,top+h-2);
+ };
+ const check=(left,top,ok)=>{
+  if(!ok)return;
+  x.strokeStyle='#122a21';x.lineWidth=.85;x.beginPath();
+  x.moveTo(left-2,top-2);x.lineTo(left+2,top+2);
+  x.moveTo(left-2,top+2);x.lineTo(left+2,top-2);x.stroke();
+ };
+ put(dateText(state.acc_date),50,70,69);
+ put(state.acc_time,130,70,32);
+ put(state.acc_place,249,65,75,9,5.4,'Lugar del accidente');
+ put(state.acc_country,188,75,132,7,5.5);
+ check(363,78,state.victims==='No');check(406,78,state.victims==='Sí');
+ check(75,112,state.other_vehicles_damage!=='Sí');check(116,112,state.other_vehicles_damage==='Sí');
+ check(158,112,state.other_objects_damage!=='Sí');check(201,112,state.other_objects_damage==='Sí');
+ put(state.witnesses,224,96,309,9,5.4,'Testigos');
+
+ for(const [side,p,dx] of [['A','a_',0],['B',prefixOf(partner),318]]){
+  const pval=n=>state[p+n]||'';
+  const field=(n,l,t,w,h=9)=>put(pval(n),l+dx,t,w,h,5.8,side+' '+n);
+  field('insured_name',85,151,131);field('insured_surname',87,164,129);
+  field('insured_address',90,177,126);field('insured_postal',99,189,35);
+  field('insured_country',151,189,65);field('insured_contact',96,200,120);
+  field('vehicle_model',51,242,76,10);field('plate',51,258,76,11);
+  field('plate_country',51,276,76,9);field('trailer_plate',141,258,74,11);
+  field('trailer_country',141,276,74,9);
+  field('insurer',82,300,134);field('policy',93,311,123);field('green_card',113,323,103);
+  put(dateText(pval('green_from')),151+dx,345,43,9,5);
+  put(dateText(pval('green_to')),198+dx,345,18,9,4.8,'Validez Carta Verde');
+  field('agency',159,358,57);field('agency_name',85,369,131);
+  field('agency_address',89,380,127);field('agency_country',153,391,63);
+  field('agency_contact',96,403,120);
+  check(102+dx,422,pval('own_damage')==='No');check(144+dx,422,pval('own_damage')==='Sí');
+  field('driver_name',85,439,131);field('driver_surname',87,452,129);
+  put(dateText(pval('driver_birth')),117+dx,465,99,8,5.8);
+  field('driver_address',87,477,129,7);field('driver_country',152,488,64,7);
+  field('driver_contact',96,500,120,8);field('license',129,511,87,8);
+  field('license_category',117,523,99,8);
+  put(dateText(pval('license_until')),121+dx,534,95,7,5.8);
+ }
+
+ const ei=partner.charCodeAt(0)-67;
  const ca=partner==='B'?state.circA:(state.extraCircA[ei]||{});
  const cb=partner==='B'?state.circB:(state.extraCircB[ei]||{});
- const sigA=partner==='B'?state.sigA:state[pB+'sig_a'];
- const sigB=partner==='B'?state.sigB:state[pB+'sig'];
+ const yy=[174,184,202,217,239,258,280,301,328,349,363,377,391,405,419,440,461];
+ yy.forEach((y,i)=>{check(229,y,ca[i+1]);check(352,y,cb[i+1]);});
+ put(Object.values(ca).filter(Boolean).length,226,479,8,7,5.8);
+ put(Object.values(cb).filter(Boolean).length,349,479,8,7,5.8);
 
- const [impactA,impactB,sketch,sigAImg,sigBImg]=await Promise.all([
-  loadPicture(daaVectorImpactData('A')),
-  loadPicture(daaVectorImpactData(partner)),
-  loadPicture(daaVectorSketchData(partner)),
-  sigA?loadPicture(sigA):Promise.resolve(null),
-  sigB?loadPicture(sigB):Promise.resolve(null)
- ]);
-
- const canvas=document.createElement('canvas');
- canvas.width=2382;canvas.height=3369;
- const x=canvas.getContext('2d',{alpha:false});
- if(!x)throw new Error('No se pudo crear el lienzo del parte.');
- x.fillStyle='#fff';x.fillRect(0,0,canvas.width,canvas.height);
- x.save();x.scale(3,3);
-
- const ink='#111',line='#777',aBg='#edf8fd',aHead='#24aada',bBg='#fffdeb',bHead='#f4ea13';
- const overflow=[];
- const rect=(l,t,w,h,fill='#fff',stroke=line,lw=1)=>{x.fillStyle=fill;x.fillRect(l,t,w,h);x.strokeStyle=stroke;x.lineWidth=lw;x.strokeRect(l,t,w,h);};
- const txt=(v,l,t,size=7,weight='400',align='left',color=ink)=>{
-  x.save();x.fillStyle=color;x.font=weight+' '+size+'px Arial';x.textAlign=align;x.textBaseline='top';x.fillText(String(v??''),l,t);x.restore();
- };
- const fit=(v,l,t,w,size=7,weight='400',align='left',color=ink)=>{
-  v=String(v??'');if(!v)return;
-  x.save();x.fillStyle=color;x.textAlign=align;x.textBaseline='top';
-  let s=size;x.font=weight+' '+s+'px Arial';
-  while(x.measureText(v).width>w&&s>4.8){s-=.2;x.font=weight+' '+s+'px Arial';}
-  let out=v;
-  if(x.measureText(out).width>w){
-   while(out&&x.measureText(out+'…').width>w)out=out.slice(0,-1);
-   out+='…';
-  }
-  x.fillText(out,l,t);x.restore();
- };
- const wrap=(v,l,t,w,lineH=9,maxLines=3,size=6,weight='400',color=ink)=>{
-  x.save();x.fillStyle=color;x.font=weight+' '+size+'px Arial';x.textAlign='left';x.textBaseline='top';
-  const words=String(v??'').split(/\s+/).filter(Boolean);let lineText='',lines=[];
-  for(const word of words){
-   const test=lineText?lineText+' '+word:word;
-   if(x.measureText(test).width>w&&lineText){lines.push(lineText);lineText=word;}else lineText=test;
-  }
-  if(lineText)lines.push(lineText);
-  lines.slice(0,maxLines).forEach((s,i)=>x.fillText(s,l,t+i*lineH));
-  x.restore();
-  return lines.length;
- };
- const mark=(l,t,on)=>{rect(l,t,11,11,'#fff','#222',.8);if(on){x.save();x.strokeStyle='#111';x.lineWidth=1.4;x.beginPath();x.moveTo(l+2,t+2);x.lineTo(l+9,t+9);x.moveTo(l+9,t+2);x.lineTo(l+2,t+9);x.stroke();x.restore();}};
- const contain=(im,l,t,w,h)=>{
-  if(!im)return;
-  const iw=im.naturalWidth||im.width,ih=im.naturalHeight||im.height;
-  if(!iw||!ih)return;
-  const s=Math.min(w/iw,h/ih),dw=iw*s,dh=ih*s;
-  x.drawImage(im,l+(w-dw)/2,t+(h-dh)/2,dw,dh);
- };
- const divider=(y,l,w)=>{x.strokeStyle=line;x.lineWidth=.7;x.beginPath();x.moveTo(l,y);x.lineTo(l+w,y);x.stroke();};
- const field=(label,value,l,t,w,lh=11)=>{
-  txt(label,l,t,5.5,'700');
-  fit(value,l+Math.min(62,w*.42),t,w-Math.min(64,w*.44),6,'400');
-  return t+lh;
- };
-
- // Encabezado
- txt('DECLARACIÓN AMISTOSA DE ACCIDENTE',20,14,18,'900');
- const topY=40;
- rect(20,topY,160,42);rect(180,topY,80,42);rect(260,topY,300,42);rect(560,topY,214,42);
- txt('1 Fecha del accidente',25,45,7,'700');fit(dateText(state.acc_date),25,59,145,9,'700');
- txt('Hora',185,45,7,'700');fit(state.acc_time,185,59,65,9,'700');
- txt('2 Localización',265,45,7,'700');fit(state.acc_place,265,58,285,6.5,'700');fit(state.acc_country,265,70,285,6);
- txt('3 Víctima(s), incluso leve(s)',565,45,7,'700');txt('No',566,62,6);mark(586,60,state.victims==='No');txt('Sí',612,62,6);mark(628,60,state.victims==='Sí');
-
- rect(20,82,365,54);rect(385,82,389,54);
- txt('4 Daños materiales',25,87,7,'700');
- txt('Vehículos distintos de A y B',25,101,6);txt('No',190,101,6);mark(208,99,state.other_vehicles_damage!=='Sí');txt('Sí',228,101,6);mark(244,99,state.other_vehicles_damage==='Sí');
- txt('Objetos distintos al vehículo',25,116,6);txt('No',190,116,6);mark(208,114,state.other_objects_damage!=='Sí');txt('Sí',228,116,6);mark(244,114,state.other_objects_damage==='Sí');
- txt('5 Testigos: nombre, dirección, teléfono',390,87,7,'700');fit(state.witnesses,390,103,374,6.2);
-
- const mainY=136,mainH=532,leftX=20,leftW=260,centerX=280,centerW=234,rightX=514,rightW=260;
-
- function drawSide(side,p,l,w,bg,head){
-  rect(l,mainY,w,mainH,bg,line,1);
-  x.fillStyle=head;x.fillRect(l,mainY,w,32);
-  txt('Vehículo '+side,l+w/2,mainY+7,13,'700','center');
-
-  let y=mainY+32;
-  const sec=(title,h)=>{
-   divider(y,l,w);txt(title,l+6,y+5,7,'700');const sy=y;y+=18;return {sy,h};
-  };
-  const v=n=>state[p+n]||'';
-
-  let s=sec('6 Asegurado (véase póliza de seguro)',96);
-  y=field('Nombre:',v('insured_name'),l+6,y,w-12);
-  y=field('Apellidos:',v('insured_surname'),l+6,y,w-12);
-  y=field('Dirección:',v('insured_address'),l+6,y,w-12);
-  y=field('C.P.:',v('insured_postal'),l+6,y,110);
-  fit('País: '+v('insured_country'),l+122,y-11,w-128,6);
-  y=field('Tel./E-mail:',v('insured_contact'),l+6,y,w-12);
-  y=s.sy+s.h;
-
-  s=sec('7 Vehículo',90);
-  y=field('Tipo:',v('vehicle_type'),l+6,y,w-12);
-  y=field('Marca/modelo:',v('vehicle_model'),l+6,y,w-12);
-  y=field('Matrícula:',v('plate'),l+6,y,w-12);
-  y=field('País matrícula:',v('plate_country'),l+6,y,w-12);
-  y=field('Remolque:',v('trailer_plate'),l+6,y,w-12);
-  fit('País remolque: '+v('trailer_country'),l+6,y,w-12,5.8);
-  y=s.sy+s.h;
-
-  s=sec('8 Aseguradora (véase póliza)',164);
-  y=field('Nombre:',v('insurer'),l+6,y,w-12);
-  y=field('Póliza:',v('policy'),l+6,y,w-12);
-  y=field('Carta Verde:',v('green_card'),l+6,y,w-12);
-  y=field('Válida desde:',dateText(v('green_from')),l+6,y,w-12);
-  y=field('Hasta:',dateText(v('green_to')),l+6,y,w-12);
-  y=field('Agencia:',v('agency'),l+6,y,w-12);
-  y=field('Nombre:',v('agency_name'),l+6,y,w-12);
-  y=field('Dirección:',v('agency_address'),l+6,y,w-12);
-  y=field('País:',v('agency_country'),l+6,y,w-12);
-  y=field('Tel./E-mail:',v('agency_contact'),l+6,y,w-12);
-  fit('Daños propios: '+v('own_damage'),l+6,y,w-12,5.8,'700');
-  y=s.sy+s.h;
-
-  s=sec('9 Conductor (ver permiso de conducir)',150);
-  y=field('Nombre:',v('driver_name'),l+6,y,w-12);
-  y=field('Apellidos:',v('driver_surname'),l+6,y,w-12);
-  y=field('Nacimiento:',dateText(v('driver_birth')),l+6,y,w-12);
-  y=field('Dirección:',v('driver_address'),l+6,y,w-12);
-  y=field('País:',v('driver_country'),l+6,y,w-12);
-  y=field('Tel./E-mail:',v('driver_contact'),l+6,y,w-12);
-  y=field('Permiso nº:',v('license'),l+6,y,w-12);
-  y=field('Categoría:',v('license_category'),l+6,y,w-12);
-  fit('Válido hasta: '+dateText(v('license_until')),l+6,y,w-12,5.8);
+ if(state.scene&&(state.scene.items?.length||state.scene.lines?.length)){
+  const scene=document.createElement('canvas');scene.width=1320;scene.height=558;
+  paintScene(scene,-1,partner);x.drawImage(scene,127,543,329,139);scene.width=scene.height=1;
  }
 
- drawSide('A','a_',leftX,leftW,aBg,aHead);
- drawSide(partner,pB,rightX,rightW,bBg,bHead);
-
- // Circunstancias
- rect(centerX,mainY,centerW,mainH,'#fff',line,1);
- txt('12. CIRCUNSTANCIAS',centerX+centerW/2,mainY+7,12,'800','center');
- wrap('Marcar con una X las casillas que correspondan a cada vehículo.',centerX+10,mainY+27,centerW-20,8,2,5.5,'700');
- let cy=mainY+49;
- for(let i=0;i<circs.length;i++){
-  const n=i+1;
-  mark(centerX+8,cy+3,!!ca[n]);txt(n,centerX+22,cy+4,5.5,'700');
-  mark(centerX+centerW-19,cy+3,!!cb[n]);txt(n,centerX+centerW-31,cy+4,5.5,'700');
-  wrap(circs[i],centerX+38,cy+1,centerW-76,7,2,5.15,'400');
-  divider(cy+24,centerX,centerW);
-  cy+=24;
+ // Todos los impactos se trasladan al recuadro 10 de la plantilla clásica.
+ // El punto 1 conserva la flecha de impacto inicial; los demás quedan numerados.
+ for(const [s,isRight] of [['A',false],[partner,true]]){
+  const pp=prefixOf(s),type=kind(state[pp+'vehicle_type']);
+  const key=(s==='A'||s==='B')?'impacts'+s:pp+'impacts';
+  const hits=getImpactList(key);
+  const region=type==='Moto'?[51,593,15,35]:type==='Camion'?[97,578,23,49]:[71,581,22,47];
+  let [lx,ly,w,h]=region;if(isRight)lx+=413;
+  const len=220,a=ARTWORK[type],ww=len*a.w/a.h;
+  hits.forEach((hit,index)=>{
+   const rx=Math.max(0,Math.min(1,(Number(hit[0])-(160-ww/2))/ww));
+   const ry=Math.max(0,Math.min(1,(Number(hit[1])-(154-110))/220));
+   const px=lx+w*rx,py=ly+h*ry;
+   x.save();
+   x.fillStyle='#c3261e';x.beginPath();x.arc(px,py,3.8,0,Math.PI*2);x.fill();
+   x.fillStyle='#fff';x.font='bold 4.7px Arial';x.textAlign='center';x.textBaseline='middle';
+   x.fillText(String(index+1),px,py+.2);
+   if(index===0){
+    x.strokeStyle='#c3261e';x.lineWidth=1.2;x.beginPath();
+    x.moveTo(px+11,py-13);x.lineTo(px+4,py-5);x.stroke();
+    x.beginPath();x.moveTo(px+4,py-5);x.lineTo(px+5,py-10);
+    x.moveTo(px+4,py-5);x.lineTo(px+9,py-5);x.stroke();
+   }
+   x.restore();
+  });
  }
- txt('A: '+Object.values(ca).filter(Boolean).length+' casillas',centerX+10,mainY+464,6,'700');
- txt(partner+': '+Object.values(cb).filter(Boolean).length+' casillas',centerX+centerW-10,mainY+464,6,'700','right');
- divider(mainY+483,centerX,centerW);
- txt('La firma de ambos conductores es obligatoria',centerX+centerW/2,mainY+490,6.1,'800','center');
- txt('No implica reconocimiento de responsabilidad.',centerX+centerW/2,mainY+503,5.3,'400','center');
 
- // Impactos y croquis
- const lowerY=668,lowerH=250,impactW=135,sketchX=155,sketchW=484,rightImpactX=639;
- rect(20,lowerY,impactW,lowerH,aBg,line,1);
- rect(sketchX,lowerY,sketchW,lowerH,'#fff',line,1);
- rect(rightImpactX,lowerY,impactW,lowerH,bBg,line,1);
+ const textArea=(v,l,t,w,lines,label)=>{
+  x.fillStyle='#12251e';x.font='5.7px Arial';
+  const needed=wrapText(x,v,l,t,w,8,lines);
+  if(needed>lines)overflow.push(label+': '+v);
+ };
+ textArea(state.a_damages||'',50,658,71,3,'Daños A');
+ textArea(state[prefixOf(partner)+'damages']||'',463,658,70,3,'Daños '+partner);
+ textArea(state.a_observations||'',50,703,149,3,'Observaciones A');
+ textArea(state[prefixOf(partner)+'observations']||'',382,703,150,3,'Observaciones '+partner);
 
- wrap('10 Indicar el punto de choque inicial y los impactos adicionales',26,lowerY+6,impactW-12,8,3,5.4,'700');
- wrap('10 Indicar el punto de choque inicial y los impactos adicionales',rightImpactX+6,lowerY+6,impactW-12,8,3,5.4,'700');
- rect(27,lowerY+31,121,140,'#fff','#bbb',.7);
- rect(rightImpactX+7,lowerY+31,121,140,'#fff','#bbb',.7);
- contain(impactA,29,lowerY+33,117,136);
- contain(impactB,rightImpactX+9,lowerY+33,117,136);
- divider(lowerY+176,20,impactW);divider(lowerY+176,rightImpactX,impactW);
- txt('11 Daños apreciados A',26,lowerY+182,6,'700');
- wrap(state.a_damages,26,lowerY+195,impactW-12,9,5,5.6);
- txt('11 Daños apreciados '+partner,rightImpactX+6,lowerY+182,6,'700');
- wrap(state[pB+'damages'],rightImpactX+6,lowerY+195,impactW-12,9,5,5.6);
-
- txt('13 Croquis del Accidente',sketchX+sketchW/2,lowerY+7,8,'800','center');
- txt('(en el momento de la colisión)',sketchX+sketchW/2,lowerY+19,5.5,'400','center');
- rect(sketchX+8,lowerY+32,sketchW-16,lowerH-42,'#fff','#ccc',.7);
- contain(sketch,sketchX+10,lowerY+34,sketchW-20,lowerH-46);
-
- // Observaciones y firmas
- const obsY=918,obsH=150,obsW=235,signX=255,signW=284,rightObsX=539;
- rect(20,obsY,obsW,obsH,aBg,line,1);
- rect(signX,obsY,signW,obsH,'#fff',line,1);
- rect(rightObsX,obsY,235,obsH,bBg,line,1);
- txt('14 Observaciones A',26,obsY+7,7,'700');
- wrap(state.a_observations,26,obsY+23,obsW-12,10,10,6);
- txt('14 Observaciones '+partner,rightObsX+6,obsY+7,7,'700');
- wrap(state[pB+'observations'],rightObsX+6,obsY+23,223,10,10,6);
-
- txt('15 Firma de los conductores',signX+signW/2,obsY+7,7.5,'700','center');
- rect(signX+10,obsY+25,126,92,'#fff','#ccc',.7);
- rect(signX+148,obsY+25,126,92,'#fff','#ccc',.7);
- contain(sigAImg,signX+13,obsY+28,120,86);
- contain(sigBImg,signX+151,obsY+28,120,86);
- txt('A',signX+73,obsY+122,11,'800','center');
- txt(partner,signX+211,obsY+122,11,'800','center');
-
- txt('Copia digital generada a partir de los datos consignados por los implicados. Destino corporativo: flota@allzonelogistics.com.',20,1082,5.2,'400');
-
- if(!sigA||!sigB||demo){
-  x.save();x.globalAlpha=.22;x.fillStyle='#b2211a';x.font='900 30px Arial';x.textAlign='center';x.translate(397,560);x.rotate(-.38);
+ const siga=partner==='B'?state.sigA:state[prefixOf(partner)+'sig_a'];
+ const sigb=partner==='B'?state.sigB:state[prefixOf(partner)+'sig'];
+ if(siga){const im=await loadPicture(siga);x.drawImage(im,218,703,66,22);}
+ if(sigb){const im=await loadPicture(sigb);x.drawImage(im,298,703,66,22);}
+ if(!siga||!sigb||demo){
+  x.save();x.globalAlpha=.30;x.fillStyle='#ba211b';x.font='bold 16px Arial';
+  x.translate(285,405);x.rotate(-.42);x.textAlign='center';
   x.fillText(demo?'SIMULACIÓN · DATOS FICTICIOS':'BORRADOR · FALTAN FIRMAS',0,0);x.restore();
  }
-
- x.restore();
- return {canvas,overflow};
+ return {canvas:c,overflow};
 }
 async function photoPages(partner=null){const ts=photoTargets().filter(t=>photos.has(t.key)&&(!partner||t.key==='a_damage'||t.key==='a_plate'||t.key===prefixOf(partner).slice(0,-1)+'_damage'||t.key===prefixOf(partner).slice(0,-1)+'_plate'));const pages=[];for(let i=0;i<ts.length;i+=2){const c=blankPage('Anexo fotográfico',dateText(state.acc_date)+' · A: '+(state.a_plate||'')+' · '+(state.acc_place||'')),x=c.getContext('2d');for(let j=0;j<2&&i+j<ts.length;j++){const t=ts[i+j],p=photos.get(t.key),im=await loadPicture(p.data),y=365+j*920;x.fillStyle='#e9f3ef';x.fillRect(82,y,1490,67);x.fillStyle='#22483d';x.font='bold 29px Arial';x.fillText(t.label,105,y+43);const fit=Math.min(1450/im.naturalWidth,725/im.naturalHeight),w=im.naturalWidth*fit,h=im.naturalHeight*fit;x.drawImage(im,102+(1450-w)/2,y+94+(725-h)/2,w,h);x.font='23px Arial';x.fillStyle='#516b61';x.fillText('Foto '+(i+j+1)+' de '+ts.length+' · '+(p.source==='camera'?'Cámara':'Biblioteca'),105,y+864);}pages.push(await pageRecord(c));c.width=c.height=1;await new Promise(r=>setTimeout(r,0));}return pages;}
 async function notesPage(title,rows){const pages=[];let c=blankPage(title,'Datos adicionales del accidente'),x=c.getContext('2d'),y=340;for(const [label,value] of rows){if(!value)continue;if(y>2040){pages.push(await pageRecord(c));c=blankPage(title+' (continuación)','');x=c.getContext('2d');y=340;}x.fillStyle='#173d32';x.font='bold 28px Arial';x.fillText(label,86,y);x.font='27px Arial';x.fillStyle='#243e34';const n=wrapText(x,value,86,y+42,1470,37,40);y+=82+n*37;}pages.push(await pageRecord(c));return pages;}

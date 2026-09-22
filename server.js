@@ -5,7 +5,7 @@ const SUPABASE_FUNCTION_URL = process.env.SUPABASE_FUNCTION_URL || '';
 const SUPABASE_INTERNAL_KEY = process.env.SUPABASE_INTERNAL_KEY || '';
 const SENDER_EMAIL = process.env.SENDER_EMAIL || 'flota@allzonelogistics.com';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://jorgefelipecastro-debug.github.io';
-const MAX_BODY = 22 * 1024 * 1024;
+const MAX_BODY = 42 * 1024 * 1024;
 const rate = new Map();
 
 function cors(res, origin) {
@@ -87,12 +87,16 @@ const server = http.createServer(async (req, res) => {
       if (!recipients.includes(SENDER_EMAIL.toLowerCase())) recipients.unshift(SENDER_EMAIL.toLowerCase());
       const filename = String(body.filename || 'Parte_Accidente_Allzone.pdf').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
       const pdfBase64 = String(body.pdfBase64 || '');
+      const fleetFilename = String(body.fleetFilename || filename).replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
+      const fleetPdfBase64 = String(body.fleetPdfBase64 || pdfBase64);
+      const mailBatchId = String(body.mailBatchId || '').trim().slice(0,120);
       const plateA = String(body.plateA || '').trim().slice(0,30);
       const plateB = String(body.plateB || '').trim().slice(0,30);
       const date = String(body.date || '').trim().slice(0,30);
 
       if (!recipients.length || recipients.length > 6) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
       if (!pdfBase64 || pdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_attachment'}, origin);
+      if (!fleetPdfBase64 || fleetPdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_fleet_attachment'}, origin);
 
       const r = await fetch(SUPABASE_FUNCTION_URL, {
         method:'POST',
@@ -104,6 +108,9 @@ const server = http.createServer(async (req, res) => {
           recipients,
           filename,
           pdfBase64,
+          fleetFilename,
+          fleetPdfBase64,
+          mailBatchId,
           plateA,
           plateB,
           date,

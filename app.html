@@ -535,38 +535,49 @@ async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdf
 }else if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El archivo está preparado; no se ha enviado por correo.';}catch(e){if(note)note.textContent='No se pudo generar: '+e.message;else navMessage(e.message);console.error(e);}finally{pdfBusy=false;nextBtn.disabled=false;}}
 const MAIL_API='https://parte-accidente-mailer-production.up.railway.app';
 function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(r.error||new Error('No se pudo preparar el PDF.'));r.readAsDataURL(blob);});}
-let currentMailBatchId='';
 async function sendReportByEmail(){
  if(pdfBusy)return;
  sync();
- const recipients=[String(state.b_copy_email||'').trim()].filter(Boolean);
+ const contrary=String(state.b_copy_email||'').trim();
  const emailField=document.querySelector('[data-field="b_copy_email"]');
- if(!recipients.length||!emailField||!emailField.checkValidity()){navMessage('Introduce un correo válido del contrario.');emailField?.focus();return;}
+ if(!contrary||!emailField||!emailField.checkValidity()){navMessage('Introduce un correo válido del contrario.');emailField?.focus();return;}
  pdfBusy=true;nextBtn.disabled=true;
  const note=document.getElementById('pdfStatus');
  const btn=document.getElementById('sendAndFinish')||document.getElementById('sendEmailReport');
  if(btn)btn.disabled=true;
- if(note)note.textContent='Generando el parte del contrario y el PDF de Flota…';
- try{
-  const [result,fleetResult]=await Promise.all([buildDocument('pair','B'),buildDocument('fleetMail','B')]);
-  const [pdfBase64,fleetPdfBase64]=await Promise.all([blobToBase64(result.blob),blobToBase64(fleetResult.blob)]);
-  const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
-  const filename='DAA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
-  const fleetFilename='FLOTA_PARTE_DIRECCION_GOLPES_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
-  if(!currentMailBatchId)currentMailBatchId=(crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
+
+ const postPdf=async(recipients,filename,blob)=>{
+  const pdfBase64=await blobToBase64(blob);
   const response=await fetch(MAIL_API+'/send-report',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({recipients,filename,pdfBase64,fleetFilename,fleetPdfBase64,mailBatchId:currentMailBatchId,plateA:state.a_plate,plateB:state.b_plate,date:state.acc_date,place:state.acc_place,postcode:state.acc_postcode})
+   body:JSON.stringify({recipients,filename,pdfBase64,plateA:state.a_plate,plateB:state.b_plate,date:state.acc_date,place:state.acc_place,postcode:state.acc_postcode})
   });
   let data={};try{data=await response.json();}catch{}
   if(!response.ok||!data.ok){
-   if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado. Falta activar la cuenta de correo una sola vez.');
+   if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado.');
    if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
    throw new Error('El servidor de correo no pudo completar el envío.');
   }
-  currentMailBatchId='';
-  if(note)note.textContent='Correos enviados. Flota ha recibido: parte + dirección + fotos del golpe.';
+ };
+
+ if(note)note.textContent='Generando los documentos…';
+ try{
+  const [pairResult,fleetResult]=await Promise.all([
+   buildDocument('pair','B'),
+   buildDocument('fleetMail','B')
+  ]);
+  const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
+  const pairName='DAA_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
+  const fleetName='FLOTA_PARTE_DIRECCION_GOLPES_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
+
+  if(note)note.textContent='Enviando el parte al contrario…';
+  await postPdf([contrary],pairName,pairResult.blob);
+
+  if(note)note.textContent='Enviando a Flota: parte + dirección + fotos del golpe…';
+  await postPdf([],fleetName,fleetResult.blob);
+
+  if(note)note.textContent='Envío completado. Flota ha recibido parte + dirección + fotos del golpe.';
   finalFleetReport=await buildFinalFleetReportFile();
   await clearPersistedDraft();
   idx=getSteps().findIndex(s=>s.title==='Revisión');

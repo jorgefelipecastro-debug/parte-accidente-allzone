@@ -176,7 +176,7 @@ const VERSION='V16.1 - DAA VECTORIAL HQ';
 const sprites={}, photos=new Map(), photoJobs=new Map();
 let database=null, savingTimer=0, pdfBusy=false, currentPhotoErrors=new Map(), draftFinalized=false;
 const artworkReady=Promise.all(['Moto','Coche','Camion'].map(async k=>{const im=await loadPicture(ARTWORK[k].src);sprites[k]=im;}));
-const templateReady=loadPicture('./daa_classic_hq_exact.png?v=20260922');
+const templateReady=loadPicture('./daa_classic_hq_exact.png?v=20260922b');
 const kind=t=>t==='Camión'?'Camion':t==='Moto'?'Moto':'Coche';
 const prefixOf=s=>s==='A'?'a_':s==='B'?'b_':'extra_'+(s.charCodeAt(0)-67)+'_';
 const activeVehicles=()=>['A','B',...(state.other_vehicles_damage==='Sí'?Array.from({length:Math.min(20,Number(state.additional_vehicle_count)||0)},(_,i)=>extraLabel(i)):[])];

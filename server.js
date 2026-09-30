@@ -213,7 +213,8 @@ const server = http.createServer(async (req, res) => {
       plateA:String(body.plateA || '').trim().slice(0,30),
       plateB:String(body.plateB || '').trim().slice(0,30),
       date:String(body.date || '').trim().slice(0,30),
-      place:String(body.place || '').trim().slice(0,240)
+      place:String(body.place || '').trim().slice(0,240),
+      testMode:body && body.testMode === true
     });
     const upstreamMs=Date.now()-upstreamStarted;
     const totalMs=Date.now()-started;
@@ -227,7 +228,7 @@ const server = http.createServer(async (req, res) => {
       console.error('mail_upstream_failed',r.status,data&&data.error);
       return json(res,502,{ok:false,error:data&&data.error==='provider_rejected'?'mail_provider_rejected':data&&data.error==='provider_timeout'?'mail_provider_timeout':'mail_provider_error',failedRecipient:data&&data.failedRecipient?data.failedRecipient:null},origin);
     }
-    return json(res,200,{ok:true,recipients:data.recipients||recipients,serverTimings:{receive_ms:receiveMs,parse_ms:parseMs,upstream_ms:upstreamMs,total_ms:totalMs}},origin);
+    return json(res,200,{ok:true,recipients:data.recipients||recipients,serverTimings:{receive_ms:receiveMs,parse_ms:parseMs,upstream_ms:upstreamMs,total_ms:totalMs,provider_ms:Number(data.provider_ms)||null,function_total_ms:Number(data.function_total_ms)||null}},origin);
   } catch (e) {
     console.error('send_report_error', e && e.message);
     if (e && (e.code === 'BODY_TOO_LARGE' || e.message === 'body_too_large')) {

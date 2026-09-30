@@ -623,35 +623,35 @@ async function sendReportByEmail(){
  if(btn)btn.disabled=true;
  try{
   const report=await prepareEmailReport();
-  if(note)note.textContent='Subiendo un único PDF y enviándolo a Flota y al contrario…';
-  setSendProgress('Subiendo el PDF seguro al servidor…',68);
+  if(report.fullResult.blob.size>15*1024*1024)throw new Error('El informe supera el tamaño máximo de envío.');
+  if(note)note.textContent='Subiendo el PDF directamente y enviándolo a ambos destinatarios…';
+  setSendProgress('Subiendo el PDF sin conversión adicional…',68);
   if(!currentMailBatchId)currentMailBatchId=(crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
+  const params=new URLSearchParams({
+   to:recipients[0],
+   filename:report.commonFilename,
+   mailBatchId:currentMailBatchId,
+   plateA:String(state.a_plate||''),
+   plateB:String(state.b_plate||''),
+   date:String(state.acc_date||''),
+   place:String(state.acc_place||'')
+  });
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),65000);
   let response;
   try{
-   response=await fetch(MAIL_API+'/send-report',{
-   method:'POST',
-   headers:{'Content-Type':'application/json'},
-   signal:controller.signal,
-   body:JSON.stringify({
-    recipients,
-    filename:report.commonFilename,
-    pdfBase64:report.fullPdfBase64,
-    mailBatchId:currentMailBatchId,
-    plateA:state.a_plate,
-    plateB:state.b_plate,
-    date:state.acc_date,
-    place:state.acc_place,
-    postcode:state.acc_postcode
-   })
+   response=await fetch(MAIL_API+'/send-report-binary?'+params.toString(),{
+    method:'POST',
+    headers:{'Content-Type':'application/pdf'},
+    signal:controller.signal,
+    body:report.fullResult.blob
    });
   }finally{clearTimeout(timeout);}
-  setSendProgress('PDF recibido. Enviando los correos a Flota y al contrario…',86);
+  setSendProgress('PDF recibido. Entregando al contrario y copia oculta a Flota…',88);
   let data={};try{data=await response.json();}catch{}
   if(!response.ok||!data.ok){
    if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado.');
-   if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
+   if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');if(data.error==='mail_provider_timeout')throw new Error('El proveedor de correo ha tardado demasiado. Reintenta el envío.');if(data.error==='attachment_too_large')throw new Error('El PDF es demasiado grande para enviarlo.');
    throw new Error('El servidor de correo no pudo completar el envío.');
   }
   currentMailBatchId='';
@@ -662,8 +662,8 @@ async function sendReportByEmail(){
    pages:report.fullResult.pages,
    photoCount:photoTargets().filter(t=>photos.has(t.key)).length
   };
-  if(note)note.textContent='Envío completado. Flota y el contrario han recibido el mismo PDF completo.';
-  setSendProgress('Envío completado correctamente.',100);
+  if(note)note.textContent='Envío completado. El contrario y Flota han recibido el mismo PDF completo.';
+  setSendProgress('Envío completado. El driver puede continuar la ruta.',100);
   await clearPersistedDraft();
   idx=getSteps().findIndex(s=>s.title==='Revisión');
   render();

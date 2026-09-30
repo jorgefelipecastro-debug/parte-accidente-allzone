@@ -738,4 +738,4 @@ const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=func
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());
 window.AllzoneV16={version:VERSION,artworkReady,buildDocument,photos,navTimes,step:()=>({index:idx,title:getSteps()[idx].title}),show:title=>{sync();idx=getSteps().findIndex(s=>s.title===title);render();},render,ready:()=>photoJobs.size===0};
 window.addEventListener('pagehide',purgePartOnExit);startFreshSession();
-</script></body></html>
+</script><script src="./fast-mail-v17.js?v=20260930"></script></body></html>

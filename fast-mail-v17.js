@@ -142,7 +142,7 @@ sendReportByEmail=async function(){
       try{data=await directResponse.json();}catch{data={};}
 
       if(!directResponse.ok||!data.ok){
-        if([401,403,404,405,429].includes(directResponse.status)){
+        if([401,403,404,405].includes(directResponse.status)){
           data=await fallbackRailwayV17(report,recipients);
         }else{
           throw new Error(data.error||'direct_failed');

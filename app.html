@@ -740,6 +740,21 @@ async function sendReportByEmail(){
  pdfBusy=true;nextBtn.disabled=true;
  const btn=document.getElementById('sendAndFinish')||document.getElementById('sendEmailReport');
  if(btn){btn.disabled=true;btn.textContent='ENVIANDO…';}
+ let sendingMsg=document.getElementById('sendingMailMessage');
+ let sendingDotsTimer=null,sendingDotsIndex=0;
+ if(btn){
+  if(!sendingMsg){
+   sendingMsg=document.createElement('div');
+   sendingMsg.id='sendingMailMessage';
+   sendingMsg.setAttribute('role','status');
+   sendingMsg.style.cssText='margin-top:14px;text-align:center;font-size:18px;font-weight:900;color:#075e55;min-height:26px;';
+   btn.insertAdjacentElement('afterend',sendingMsg);
+  }
+  const frames=['.','..','...',''];
+  const paintDots=()=>{sendingMsg.textContent='enviando correos espere'+frames[sendingDotsIndex];sendingDotsIndex=(sendingDotsIndex+1)%frames.length;};
+  paintDots();
+  sendingDotsTimer=setInterval(paintDots,420);
+ }
  const total0=performance.now();
  try{
   const wait0=performance.now();
@@ -814,6 +829,8 @@ async function sendReportByEmail(){
   navMessage('No se ha enviado el parte: '+msg);
   console.error(e);
  }finally{
+  if(sendingDotsTimer)clearInterval(sendingDotsTimer);
+  if(sendingMsg&&sendingMsg.isConnected)sendingMsg.remove();
   pdfBusy=false;nextBtn.disabled=false;if(btn){btn.disabled=false;btn.textContent='ENVIAR Y FINALIZAR';}
  }
 }

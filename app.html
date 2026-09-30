@@ -126,23 +126,25 @@ const baseSteps=[
 {title:'Número vehículos adicionales',conditional:'extras',render(){extraCountScreen()}},
 {title:'Tipo A',render(){
   if(state.a_vehicle_type!=='Camión'){state.a_vehicle_type='Camión';markChanged();}
+  const amazonTruckSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 550" width="390" height="550">
+    <rect width="390" height="550" fill="#ffffff"/>
+    <rect x="6" y="22" width="378" height="522" rx="31" fill="#edf9f7" stroke="#0b8c82" stroke-width="5"/>
+    <g fill="#fffceb" stroke="#0a0a0a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M121 73 L268 73 L277 89 L277 112 L112 112 L112 89 Z"/>
+      <path d="M130 83 L130 121 M260 83 L260 121"/>
+      <path d="M114 113 L276 113 L276 151 L114 151 Z"/>
+      <path d="M121 151 Q108 151 108 166 L108 391 Q108 410 128 410 L262 410 Q282 410 282 391 L282 166 Q282 151 269 151 Z"/>
+    </g>
+    <text x="195" y="264" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="700" fill="#111827">Amazon</text>
+    <path d="M132 284 C166 314 218 319 259 292" fill="none" stroke="#ff9900" stroke-width="10" stroke-linecap="round"/>
+    <path d="M249 286 L269 289 L260 306" fill="none" stroke="#ff9900" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="195" y="492" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="45" font-weight="700" fill="#0b8c82">Camión</text>
+  </svg>`;
+  const amazonTruckSrc='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(amazonTruckSvg);
   host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>¿Qué tipo de vehículo es A?</h1><p class="lead">Selecciona la silueta que corresponde.</p>
-  <div class="card" style="display:flex;justify-content:center">
-    <div class="choice active" aria-pressed="true" style="width:min(230px,76vw);padding:18px 14px">
-      <svg viewBox="0 0 150 220" role="img" aria-label="Camión Amazon" style="display:block;width:150px;height:220px;margin:0 auto 10px;overflow:visible">
-        <g fill="#fffceb" stroke="#111" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
-          <path d="M44 18h62l8 18v25H36V36z"/>
-          <path d="M36 61h78v18H36z"/>
-          <rect x="28" y="78" width="94" height="116" rx="12"/>
-          <path d="M36 49h70M47 28v22M103 28v22"/>
-        </g>
-        <text x="75" y="128" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#111827">Amazon</text>
-        <path d="M49 143c18 15 39 18 59 5" fill="none" stroke="#ff9900" stroke-width="6" stroke-linecap="round"/>
-        <path d="M105 143l8 3-5 8" fill="none" stroke="#ff9900" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Camión</span>
-    </div>
-  </div>`;
+    <div style="display:flex;justify-content:center;align-items:flex-start;margin-top:14px">
+      <img src="${amazonTruckSrc}" alt="Camión Amazon" style="display:block;width:min(42vw,220px);height:auto;border:0">
+    </div>`;
 }},
 {title:'Conductor A',render(){host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>Datos del conductor A</h1><p class="lead">Copia los datos del permiso de conducir.</p><div class="card"><div class="grid">${field('a_driver_name','Nombre','text',{required:true})}${field('a_driver_surname','Apellidos','text',{required:true})}${field('a_driver_birth','Fecha de nacimiento','date',{required:true})}${field('a_license','N.º permiso de conducir','text',{required:true})}${licenseField('a_license_category',state.a_vehicle_type||'Coche')}${field('a_license_until','Válido hasta','date',{required:true})}${field('a_driver_address','Dirección','text',{full:true,required:true})}${field('a_driver_country','País','text',{required:true})}${field('a_driver_contact','Número de teléfono','tel',{required:true})}</div></div>`;bindBasic()}},
 {title:'Seguro A',render(){

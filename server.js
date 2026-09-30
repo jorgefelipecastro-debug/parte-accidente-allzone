@@ -109,6 +109,15 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, {ok:true,mailConfigured:Boolean(SUPABASE_FUNCTION_URL && SUPABASE_INTERNAL_KEY),fastBinary:true}, origin);
   }
 
+  if (req.method === 'GET' && parsed.pathname === '/warm') {
+    if (origin !== ALLOWED_ORIGIN) return json(res, 403, {ok:false,error:'origin_not_allowed'}, origin);
+    try {
+      const r = await sendUpstream({recipients:[],filename:'warm.pdf',pdfBase64:''});
+      await r.text();
+    } catch {}
+    return json(res, 200, {ok:true,warmed:true}, origin);
+  }
+
   if (req.method !== 'POST' || !['/send-report','/send-report-binary'].includes(parsed.pathname)) {
     return json(res, 404, {ok:false,error:'not_found'}, origin);
   }

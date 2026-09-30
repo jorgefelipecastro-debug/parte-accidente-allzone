@@ -198,7 +198,7 @@ function getSteps(){
 function photoTargets(){const list=[{key:'a_damage',label:'Vehículo A · Foto del daño',required:true},{key:'a_plate',label:'Vehículo A · Foto de la matrícula',required:true},{key:'b_damage',label:'Vehículo B · Foto del daño',required:true},{key:'b_plate',label:'Vehículo B · Foto de la matrícula',required:true},{key:'scene',label:'Posición de los vehículos / entorno',required:false},{key:'docs',label:'Documentación adicional',required:false}];if(state.other_vehicles_damage==='Sí'){const n=parseInt(state.additional_vehicle_count||'0',10)||0;for(let i=0;i<n;i++){const L=extraLabel(i);list.push({key:`extra_${i}_damage`,label:`Vehículo ${L} · Foto del daño`,required:true});list.push({key:`extra_${i}_plate`,label:`Vehículo ${L} · Foto de la matrícula`,required:true})}}return list}
 
 /* Allzone V16: shared approved image assets, local-only evidence and real PDF files. */
-const VERSION='V16.7 - ENVIO RAPIDO BINARIO';
+const VERSION='V16.7 - ENVIO RAPIDO';
 const sprites={}, photos=new Map(), photoJobs=new Map();
 let database=null, savingTimer=0, pdfBusy=false, currentPhotoErrors=new Map(), draftFinalized=false;
 const artworkReady=Promise.all(['Moto','Coche','Camion'].map(async k=>{const im=await loadPicture(ARTWORK[k].src);sprites[k]=im;}));
@@ -570,7 +570,7 @@ function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new Fi
 let mailerWarmPromise=null;
 function warmMailer(){
  if(mailerWarmPromise)return mailerWarmPromise;
- mailerWarmPromise=fetch(MAIL_API+'/warm',{method:'GET',cache:'no-store'}).catch(()=>null).finally(()=>{setTimeout(()=>{mailerWarmPromise=null;},30000);});
+ mailerWarmPromise=fetch(MAIL_API+'/health',{method:'GET',cache:'no-store'}).catch(()=>null).finally(()=>{setTimeout(()=>{mailerWarmPromise=null;},30000);});
  return mailerWarmPromise;
 }
 
@@ -594,10 +594,12 @@ async function prepareEmailReport(){
   await new Promise(r=>requestAnimationFrame(r));
   setSendProgress('Montando las páginas y fotografías…',30);
   const fullResult=await buildDocument('full','B');
-  setSendProgress('PDF optimizado y listo para subida directa…',52);
+  setSendProgress('Preparando el PDF para envío inmediato…',46);
+  const fullPdfBase64=await blobToBase64(fullResult.blob);
+  setSendProgress('Informe preparado. Listo para enviar.',55);
   const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
   const commonFilename='PARTE_COMPLETO_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
-  const report={fullResult,commonFilename};
+  const report={fullResult,fullPdfBase64,commonFilename};
   preparedEmailReport=report;
   if(note)note.textContent='Informe optimizado y preparado. Al pulsar ENVIAR solo queda subirlo y entregar los dos correos.';
   return report;
@@ -623,31 +625,31 @@ async function sendReportByEmail(){
  if(btn)btn.disabled=true;
  try{
   const report=await prepareEmailReport();
-  if(report.fullResult.blob.size>15*1024*1024)throw new Error('El informe supera el tamaño máximo de envío.');
-  if(note)note.textContent='Subiendo el PDF directamente y enviándolo a ambos destinatarios…';
-  setSendProgress('Subiendo el PDF sin conversión adicional…',68);
+  if(note)note.textContent='Enviando el PDF ya preparado a Flota y al contrario…';
+  setSendProgress('Subiendo el informe preparado al servidor…',70);
   if(!currentMailBatchId)currentMailBatchId=(crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
-  const params=new URLSearchParams({
-   to:recipients[0],
-   filename:report.commonFilename,
-   mailBatchId:currentMailBatchId,
-   plateA:String(state.a_plate||''),
-   plateB:String(state.b_plate||''),
-   date:String(state.acc_date||''),
-   place:String(state.acc_place||'')
-  });
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),65000);
   let response;
   try{
-   response=await fetch(MAIL_API+'/send-report-binary?'+params.toString(),{
+   response=await fetch(MAIL_API+'/send-report',{
     method:'POST',
-    headers:{'Content-Type':'application/pdf'},
+    headers:{'Content-Type':'application/json'},
     signal:controller.signal,
-    body:report.fullResult.blob
+    body:JSON.stringify({
+     recipients,
+     filename:report.commonFilename,
+     pdfBase64:report.fullPdfBase64,
+     mailBatchId:currentMailBatchId,
+     plateA:state.a_plate,
+     plateB:state.b_plate,
+     date:state.acc_date,
+     place:state.acc_place,
+     postcode:state.acc_postcode
+    })
    });
   }finally{clearTimeout(timeout);}
-  setSendProgress('PDF recibido. Entregando al contrario y copia oculta a Flota…',88);
+  setSendProgress('Servidor recibido. El proveedor está entregando el mismo PDF al contrario y a Flota…',90);
   let data={};try{data=await response.json();}catch{}
   if(!response.ok||!data.ok){
    if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado.');

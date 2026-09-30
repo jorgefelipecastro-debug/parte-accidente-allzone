@@ -118,7 +118,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, {ok:true,warmed:true}, origin);
   }
 
-  if (req.method !== 'POST' || !['/send-report','/send-report-binary'].includes(parsed.pathname)) {
+  if (req.method !== 'POST' || !['/send-report','/send-report-binary','/telemetry'].includes(parsed.pathname)) {
     return json(res, 404, {ok:false,error:'not_found'}, origin);
   }
 
@@ -128,6 +128,29 @@ const server = http.createServer(async (req, res) => {
 
   const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (limited(ip)) return json(res, 429, {ok:false,error:'rate_limited'}, origin);
+  if (parsed.pathname === '/telemetry') {
+    try {
+      const {buffer}=await collect(req, 64 * 1024);
+      const body=JSON.parse(buffer.toString('utf8'));
+      const timings=body && body.timings && typeof body.timings==='object' ? body.timings : {};
+      const clean={};
+      for (const k of ['warm_ms','prepare_ms','build_ms','base64_ms','pdf_bytes','wait_report_ms','fetch_ms','total_send_ms']) {
+        const v=Number(timings[k]);
+        if (Number.isFinite(v) && v >= 0) clean[k]=Math.round(v);
+      }
+      const st=body && body.serverTimings && typeof body.serverTimings==='object' ? body.serverTimings : {};
+      const serverClean={};
+      for (const k of ['receive_ms','parse_ms','upstream_ms','total_ms']) {
+        const v=Number(st[k]);
+        if (Number.isFinite(v) && v >= 0) serverClean[k]=Math.round(v);
+      }
+      console.log('client_send_timing', String(body.mailBatchId||'').slice(0,120), JSON.stringify(clean), JSON.stringify(serverClean));
+      return json(res, 200, {ok:true}, origin);
+    } catch(e) {
+      return json(res, 400, {ok:false,error:'bad_telemetry'}, origin);
+    }
+  }
+
   if (!SUPABASE_FUNCTION_URL || !SUPABASE_INTERNAL_KEY) return json(res, 503, {ok:false,error:'mail_not_configured'}, origin);
 
   try {
@@ -137,7 +160,9 @@ const server = http.createServer(async (req, res) => {
       const to = String(parsed.searchParams.get('to') || '').trim().toLowerCase();
       if (!validEmail(to)) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
 
+      const receive0=Date.now();
       const {buffer,size} = await collect(req, MAX_BINARY_PDF);
+      const receiveMs=Date.now()-receive0;
       if (!size || String(req.headers['content-type'] || '').split(';')[0] !== 'application/pdf') {
         return json(res, 400, {ok:false,error:'invalid_attachment'}, origin);
       }
@@ -159,14 +184,19 @@ const server = http.createServer(async (req, res) => {
       const r = await sendUpstream(payload);
       return finishUpstream(r,res,origin,[to],{
         raw_pdf_bytes:size,
+        receive_ms:receiveMs,
         total_ms:Date.now()-started,
         upstream_ms:Date.now()-upstreamStarted
       });
     }
 
     // Legacy JSON endpoint kept for compatibility with cached older app versions.
+    const receive0=Date.now();
     const {buffer,size} = await collect(req, MAX_JSON_BODY);
+    const receiveMs=Date.now()-receive0;
+    const parse0=Date.now();
     const body = JSON.parse(buffer.toString('utf8'));
+    const parseMs=Date.now()-parse0;
     const rawRecipients = Array.isArray(body.recipients) ? body.recipients : [body.to];
     const recipients = [...new Set(rawRecipients.map(v=>String(v||'').trim().toLowerCase()).filter(validEmail))];
     const filename = String(body.filename || 'Parte_Accidente_Allzone.pdf').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
@@ -185,11 +215,19 @@ const server = http.createServer(async (req, res) => {
       date:String(body.date || '').trim().slice(0,30),
       place:String(body.place || '').trim().slice(0,240)
     });
-    return finishUpstream(r,res,origin,recipients,{
-      legacy_request_bytes:size,
-      total_ms:Date.now()-started,
-      upstream_ms:Date.now()-upstreamStarted
-    });
+    const upstreamMs=Date.now()-upstreamStarted;
+    const totalMs=Date.now()-started;
+    const clientTimings=body && body.clientTimings && typeof body.clientTimings==='object' ? body.clientTimings : {};
+    console.log('mail_phase_timing', String(body.mailBatchId||'').slice(0,120),
+      'receive_ms',receiveMs,'parse_ms',parseMs,'upstream_ms',upstreamMs,'total_ms',totalMs,
+      'client',JSON.stringify(clientTimings));
+    const text=await r.text();
+    let data={};try{data=text?JSON.parse(text):{};}catch{}
+    if(!r.ok||!data.ok){
+      console.error('mail_upstream_failed',r.status,data&&data.error);
+      return json(res,502,{ok:false,error:data&&data.error==='provider_rejected'?'mail_provider_rejected':data&&data.error==='provider_timeout'?'mail_provider_timeout':'mail_provider_error',failedRecipient:data&&data.failedRecipient?data.failedRecipient:null},origin);
+    }
+    return json(res,200,{ok:true,recipients:data.recipients||recipients,serverTimings:{receive_ms:receiveMs,parse_ms:parseMs,upstream_ms:upstreamMs,total_ms:totalMs}},origin);
   } catch (e) {
     console.error('send_report_error', e && e.message);
     if (e && (e.code === 'BODY_TOO_LARGE' || e.message === 'body_too_large')) {

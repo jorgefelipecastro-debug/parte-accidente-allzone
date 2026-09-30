@@ -567,6 +567,13 @@ async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdf
 }else if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El archivo está preparado; no se ha enviado por correo.';}catch(e){if(note)note.textContent='No se pudo generar: '+e.message;else navMessage(e.message);console.error(e);}finally{pdfBusy=false;nextBtn.disabled=false;}}
 const MAIL_API='https://parte-accidente-mailer-production.up.railway.app';
 function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(r.error||new Error('No se pudo preparar el PDF.'));r.readAsDataURL(blob);});}
+let mailerWarmPromise=null;
+function warmMailer(){
+ if(mailerWarmPromise)return mailerWarmPromise;
+ mailerWarmPromise=fetch(MAIL_API+'/warm',{method:'GET',cache:'no-store'}).catch(()=>null).finally(()=>{setTimeout(()=>{mailerWarmPromise=null;},30000);});
+ return mailerWarmPromise;
+}
+
 function setSendProgress(text,pct,error=false){
  const box=document.getElementById('sendProgressBox');
  const label=document.getElementById('sendProgressText');
@@ -587,12 +594,10 @@ async function prepareEmailReport(){
   await new Promise(r=>requestAnimationFrame(r));
   setSendProgress('Montando las páginas y fotografías…',30);
   const fullResult=await buildDocument('full','B');
-  setSendProgress('Optimizando el PDF para que pese menos…',48);
-  const fullPdfBase64=await blobToBase64(fullResult.blob);
-  setSendProgress('Informe preparado. Listo para enviar.',55);
+  setSendProgress('PDF optimizado y listo para subida directa…',52);
   const clean=v=>String(v||'sin_datos').replace(/[^A-Za-z0-9_-]/g,'_');
   const commonFilename='PARTE_COMPLETO_ALLZONE_'+clean(state.acc_date)+'_'+clean(state.a_plate)+'_'+clean(state.b_plate)+'.pdf';
-  const report={fullResult,fullPdfBase64,commonFilename};
+  const report={fullResult,commonFilename};
   preparedEmailReport=report;
   if(note)note.textContent='Informe optimizado y preparado. Al pulsar ENVIAR solo queda subirlo y entregar los dos correos.';
   return report;
@@ -715,7 +720,7 @@ async function downloadOrShareFleetReport(){
 }
 function reviewScreen(){host.innerHTML=`<div class="eyebrow">Finalizado</div><h1>Parte enviado correctamente</h1><p class="lead">El parte se ha enviado por correo. <b>Flota y el contrario han recibido exactamente el mismo PDF</b>, con el parte cumplimentado, la dirección exacta y todas las fotografías del accidente.</p><div class="card"><p><b>Dirección:</b> ${esc(state.acc_place||'—')}</p><p><b>Código postal:</b> ${esc(state.acc_postcode||'—')}</p><button type="button" class="pillbtn primary" id="downloadFullOnly" disabled>PREPARANDO INFORME COMPLETO…</button><p class="hint">WhatsApp recibirá un solo archivo PDF. Las fotografías y la ubicación van dentro del mismo documento, no como archivos separados.</p><div id="finalReportStatus" role="status">Generando informe…</div></div>`;document.getElementById('downloadFullOnly').onclick=downloadOrShareFleetReport;prepareFinalFleetReport();}
 function openDaaDocument(){return downloadPdf('pair');}
-const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<div class="eyebrow">Envío</div><h1>Correo del contrario</h1><p class="lead">Introduce el correo del conductor o asegurado del vehículo B. Flota y el contrario recibirán exactamente el mismo PDF completo con el parte, la dirección exacta y las fotos del accidente.</p><div class="card">${field('b_copy_email','Correo del contrario','email',{required:true})}<div class="fixed">Copia automática para Flota: flota@allzonelogistics.com</div><button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button><div id="pdfStatus" role="status">Preparando el informe para acelerar el envío…</div><div class="send-progress" id="sendProgressBox"><div class="send-progress-text" id="sendProgressText">Preparando el informe…</div><div class="send-progress-track"><div class="send-progress-bar" id="sendProgressBar" style="width:8%"></div></div></div></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;prepareEmailReport().catch(e=>{const n=document.getElementById('pdfStatus');if(n)n.textContent='No se pudo preparar el informe: '+e.message;});};
+const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<div class="eyebrow">Envío</div><h1>Correo del contrario</h1><p class="lead">Introduce el correo del conductor o asegurado del vehículo B. Flota y el contrario recibirán exactamente el mismo PDF completo con el parte, la dirección exacta y las fotos del accidente.</p><div class="card">${field('b_copy_email','Correo del contrario','email',{required:true})}<div class="fixed">Copia automática para Flota: flota@allzonelogistics.com</div><button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button><div id="pdfStatus" role="status">Preparando el informe para acelerar el envío…</div><div class="send-progress" id="sendProgressBox"><div class="send-progress-text" id="sendProgressText">Preparando el informe…</div><div class="send-progress-track"><div class="send-progress-bar" id="sendProgressBar" style="width:8%"></div></div></div></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;warmMailer();prepareEmailReport().catch(e=>{const n=document.getElementById('pdfStatus');if(n)n.textContent='No se pudo preparar el informe: '+e.message;});};
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());
 window.AllzoneV16={version:VERSION,artworkReady,buildDocument,photos,navTimes,step:()=>({index:idx,title:getSteps()[idx].title}),show:title=>{sync();idx=getSteps().findIndex(s=>s.title===title);render();},render,ready:()=>photoJobs.size===0};
 window.addEventListener('pagehide',purgePartOnExit);startFreshSession();

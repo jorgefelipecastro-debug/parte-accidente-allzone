@@ -1,5 +1,5 @@
 // Railway watch trigger v2
-// Fleet PDF: parte + dirección + fotos del golpe.
+// Un único PDF completo para Flota y el contrario.
 const http = require('http');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -89,8 +89,6 @@ const server = http.createServer(async (req, res) => {
       if (!recipients.includes(SENDER_EMAIL.toLowerCase())) recipients.unshift(SENDER_EMAIL.toLowerCase());
       const filename = String(body.filename || 'Parte_Accidente_Allzone.pdf').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
       const pdfBase64 = String(body.pdfBase64 || '');
-      const fleetFilename = String(body.fleetFilename || filename).replace(/[^A-Za-z0-9._-]/g,'_').slice(0,120);
-      const fleetPdfBase64 = String(body.fleetPdfBase64 || pdfBase64);
       const mailBatchId = String(body.mailBatchId || '').trim().slice(0,120);
       const plateA = String(body.plateA || '').trim().slice(0,30);
       const plateB = String(body.plateB || '').trim().slice(0,30);
@@ -98,8 +96,7 @@ const server = http.createServer(async (req, res) => {
 
       if (!recipients.length || recipients.length > 6) return json(res, 400, {ok:false,error:'invalid_recipient'}, origin);
       if (!pdfBase64 || pdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_attachment'}, origin);
-      if (!fleetPdfBase64 || fleetPdfBase64.length > 20 * 1024 * 1024) return json(res, 400, {ok:false,error:'invalid_fleet_attachment'}, origin);
-
+      const upstreamStarted = Date.now();
       const r = await fetch(SUPABASE_FUNCTION_URL, {
         method:'POST',
         headers:{
@@ -110,8 +107,6 @@ const server = http.createServer(async (req, res) => {
           recipients,
           filename,
           pdfBase64,
-          fleetFilename,
-          fleetPdfBase64,
           mailBatchId,
           plateA,
           plateB,
@@ -133,7 +128,7 @@ const server = http.createServer(async (req, res) => {
         }, origin);
       }
 
-      console.log('mail_sent', Array.isArray(data.recipients) ? data.recipients.length : 0);
+      console.log('mail_sent', Array.isArray(data.recipients) ? data.recipients.length : 0, 'request_bytes', size, 'upstream_ms', Date.now()-upstreamStarted);
       return json(res, 200, {ok:true,recipients:data.recipients || recipients}, origin);
     } catch (e) {
       console.error('send_report_error', e && e.message);

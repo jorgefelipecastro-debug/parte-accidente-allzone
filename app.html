@@ -130,53 +130,9 @@ const baseSteps=[
     <h1>¿Qué tipo de vehículo es A?</h1>
     <p class="lead">Selecciona la silueta que corresponde.</p>
     <div style="display:flex;justify-content:center;align-items:flex-start;margin-top:14px;width:100%;overflow:visible">
-      <svg viewBox="0 0 390 550" role="img" aria-label="Camión Amazon" style="display:block;width:min(55vw,290px);max-width:100%;height:auto;overflow:visible">
-        <defs>
-          <radialGradient id="cardBgA" cx="50%" cy="48%" r="74%">
-            <stop offset="0%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#e9f8f6"/>
-          </radialGradient>
-          <linearGradient id="vanFillA" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#fffdf0"/>
-            <stop offset="100%" stop-color="#fff9d9"/>
-          </linearGradient>
-        </defs>
-
-        <!-- Tarjeta completa aprobada -->
-        <rect x="5" y="20" width="380" height="525" rx="34"
-              fill="url(#cardBgA)" stroke="#0b8d83" stroke-width="5"/>
-
-        <!-- Furgoneta / camión -->
-        <g fill="url(#vanFillA)" stroke="#080808" stroke-width="7"
-           stroke-linecap="round" stroke-linejoin="round">
-          <path d="M120 72 L270 72 L279 89 L279 110 L111 110 L111 89 Z"/>
-          <path d="M130 84 L130 121 M260 84 L260 121"/>
-          <path d="M113 111 L277 111 L277 151 L113 151 Z"/>
-          <path d="M122 151
-                   Q108 151 108 168
-                   L108 391
-                   Q108 411 129 411
-                   L261 411
-                   Q282 411 282 391
-                   L282 168
-                   Q282 151 268 151 Z"/>
-        </g>
-
-        <!-- Amazon -->
-        <text x="195" y="270" text-anchor="middle"
-              font-family="Arial,Helvetica,sans-serif"
-              font-size="47" font-weight="700" fill="#151b2b">Amazon</text>
-        <path d="M133 289 C165 313 217 320 257 295"
-              fill="none" stroke="#ff9900" stroke-width="10" stroke-linecap="round"/>
-        <path d="M247 289 L268 291 L260 307"
-              fill="none" stroke="#ff9900" stroke-width="8"
-              stroke-linecap="round" stroke-linejoin="round"/>
-
-        <!-- Nombre -->
-        <text x="195" y="494" text-anchor="middle"
-              font-family="Arial,Helvetica,sans-serif"
-              font-size="45" font-weight="700" fill="#0b8d83">Camión</text>
-      </svg>
+      <img src="./assets/pantalla3-aprobada-exacta.png?v=final1"
+           alt="Camión Amazon"
+           style="display:block;width:min(76vw,270px);max-width:100%;height:auto;object-fit:contain;border:0;background:transparent">
     </div>`;
 }},
 {title:'Conductor A',render(){host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>Datos del conductor A</h1><p class="lead">Copia los datos del permiso de conducir.</p><div class="card"><div class="grid">${field('a_driver_name','Nombre','text',{required:true})}${field('a_driver_surname','Apellidos','text',{required:true})}${field('a_driver_birth','Fecha de nacimiento','date',{required:true})}${field('a_license','N.º permiso de conducir','text',{required:true})}${licenseField('a_license_category',state.a_vehicle_type||'Coche')}${field('a_license_until','Válido hasta','date',{required:true})}${field('a_driver_address','Dirección','text',{full:true,required:true})}${field('a_driver_country','País','text',{required:true})}${field('a_driver_contact','Número de teléfono','tel',{required:true})}</div></div>`;bindBasic()}},

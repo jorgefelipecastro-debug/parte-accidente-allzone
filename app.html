@@ -128,7 +128,7 @@ const baseSteps=[
   if(state.a_vehicle_type!=='Camión'){state.a_vehicle_type='Camión';markChanged();}
   host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>¿Qué tipo de vehículo es A?</h1><p class="lead">Selecciona la silueta que corresponde.</p>
   <div style="display:flex;justify-content:center;align-items:flex-start;margin-top:14px">
-    <img src="./assets/pantalla3-camion-amazon-aprobado.webp?v=exact1" alt="Camión Amazon" style="display:block;width:min(42vw,205px);height:auto;border:0;background:transparent">
+    <img src="./assets/pantalla3-camion-amazon-aprobado.webp?v=exact2" alt="Camión Amazon" style="display:block;width:min(42vw,205px);height:auto;border:0;background:transparent">
   </div>`;
 }},
 {title:'Conductor A',render(){host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>Datos del conductor A</h1><p class="lead">Copia los datos del permiso de conducir.</p><div class="card"><div class="grid">${field('a_driver_name','Nombre','text',{required:true})}${field('a_driver_surname','Apellidos','text',{required:true})}${field('a_driver_birth','Fecha de nacimiento','date',{required:true})}${field('a_license','N.º permiso de conducir','text',{required:true})}${licenseField('a_license_category',state.a_vehicle_type||'Coche')}${field('a_license_until','Válido hasta','date',{required:true})}${field('a_driver_address','Dirección','text',{full:true,required:true})}${field('a_driver_country','País','text',{required:true})}${field('a_driver_contact','Número de teléfono','tel',{required:true})}</div></div>`;bindBasic()}},

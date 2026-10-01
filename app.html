@@ -129,34 +129,10 @@ const baseSteps=[
   host.innerHTML=`<div class="eyebrow">Vehículo A</div>
     <h1>¿Qué tipo de vehículo es A?</h1>
     <p class="lead">Selecciona la silueta que corresponde.</p>
-    <div style="display:flex;justify-content:center;align-items:flex-start;margin-top:12px;width:100%">
-      <div class="choice active" aria-pressed="true"
-           style="width:min(210px,72vw);padding:16px 14px;cursor:default">
-        <svg viewBox="0 0 180 250" role="img" aria-label="Camión Amazon"
-             style="display:block;width:min(150px,52vw);height:auto;margin:0 auto 10px;overflow:visible;stroke:#111;fill:none">
-          <g fill="#fffdf0" stroke="#111" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M57 20h66l9 18v21H48V38z"/>
-            <rect x="48" y="58" width="84" height="35" rx="5"/>
-            <rect x="34" y="91" width="112" height="123" rx="15"/>
-            <path d="M34 112H23v22h11M146 112h11v22h-11"/>
-            <path d="M47 104h86"/>
-            <path d="M47 191h86"/>
-          </g>
-          <text x="90" y="145" text-anchor="middle"
-                font-family="Arial,Helvetica,sans-serif"
-                font-size="23" font-weight="700" fill="#111827" stroke="none">Amazon</text>
-          <path d="M58 158 C76 172 104 175 123 161"
-                fill="none" stroke="#ff9900" stroke-width="7" stroke-linecap="round"/>
-          <path d="M116 156 L128 159 L122 169"
-                fill="none" stroke="#ff9900" stroke-width="6"
-                stroke-linecap="round" stroke-linejoin="round"/>
-          <g fill="#fffdf0" stroke="#111" stroke-width="5">
-            <circle cx="55" cy="213" r="10"/>
-            <circle cx="125" cy="213" r="10"/>
-          </g>
-        </svg>
-        <span>Camión</span>
-      </div>
+    <div style="display:flex;justify-content:center;align-items:flex-start;margin-top:14px;width:100%;overflow:visible">
+      <img src="./assets/pantalla3-aprobada-exacta.png?v=final3"
+           alt="Camión Amazon"
+           style="display:block;width:min(72vw,260px);max-width:100%;height:auto;object-fit:contain;border:0;background:transparent">
     </div>`;
 }},
 {title:'Conductor A',render(){host.innerHTML=`<div class="eyebrow">Vehículo A</div><h1>Datos del conductor A</h1><p class="lead">Copia los datos del permiso de conducir.</p><div class="card"><div class="grid">${field('a_driver_name','Nombre','text',{required:true})}${field('a_driver_surname','Apellidos','text',{required:true})}${field('a_driver_birth','Fecha de nacimiento','date',{required:true})}${field('a_license','N.º permiso de conducir','text',{required:true})}${licenseField('a_license_category',state.a_vehicle_type||'Coche')}${field('a_license_until','Válido hasta','date',{required:true})}${field('a_driver_address','Dirección','text',{full:true,required:true})}${field('a_driver_country','País','text',{required:true})}${field('a_driver_contact','Número de teléfono','tel',{required:true})}</div></div>`;bindBasic()}},

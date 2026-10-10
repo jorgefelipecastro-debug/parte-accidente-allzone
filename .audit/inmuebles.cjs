@@ -68,7 +68,7 @@ async function setup(which, mobile=false) {
     }
     return route.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"mailConfigured":true}'});
   });
-  await page.goto(`${origin}/${which}/app.html`);
+  await page.goto(process.env.AUDIT_PUBLIC_URL||`${origin}/${which}/app.html`);
   await page.waitForFunction(()=>window.AllzoneV16&&document.querySelector('#host h1'));
   await page.evaluate(()=>AllzoneV16.artworkReady);
   return {page,context,errors,sent,setFail:value=>failMail=value};
@@ -102,7 +102,8 @@ async function photo(page,key,source='library'){
   assert.equal(await page.locator(`#preview_${key} img`).count(),1);
 }
 async function capture(page,title,screens){
-  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.evaluate(async()=>{document.activeElement?.blur();window.scrollTo(0,0);await document.fonts.ready;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});
+  await page.mouse.move(1,1);
   await page.waitForFunction(()=>!document.querySelector('#host img:not([src^="blob:"])')||[...document.querySelectorAll('#host img')].every(im=>im.complete));
   const imagePath=path.join(results,`${new URL(page.url()).pathname.split('/')[1]}-${title.replace(/[^A-Za-z0-9]/g,'_')}.png`);
   const buffer=await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:imagePath});
@@ -189,6 +190,7 @@ async function scenarioRun(scenario,which='candidate',regression=false){
       assert.ok(await page.evaluate(()=>finalFleetReport.pages)>=Math.ceil(expectedPhotos/2)+2+(scenario.propertyOnly||scenario.property?1:0));
       const texts=await page.evaluate(()=>window.__paintText);
       if(scenario.propertyOnly||scenario.property){assert.ok(texts.includes('Daños a propiedad'));assert.ok(texts.includes('Titular de prueba'));}
+      if(scenario.propertyOnly){assert.ok(!texts.some(t=>String(t).startsWith('Datos ampliados del parte A–')));if(scenario.rich)assert.ok(texts.includes('Datos ampliados del vehículo A'));}
       assert.ok(!texts.includes('BORRADOR · FALTAN FIRMAS'));
       if(scenario.propertyOnly&&scenario.rich&&!scenario.mobile)fs.writeFileSync(path.join(results,'inmueble-escritorio.pdf'),pdf);
       if(scenario.propertyOnly&&scenario.mobile)fs.writeFileSync(path.join(results,'inmueble-movil.pdf'),pdf);
@@ -248,6 +250,21 @@ async function negativeAndTransitions(){
 (async()=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
   browser=await chromium.launch({headless:true});
+  if(process.env.AUDIT_PUBLIC_URL){
+    const response=await fetch(process.env.AUDIT_PUBLIC_URL,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(30000)});
+    assert.equal(response.status,200);
+    const publicBytes=Buffer.from(await response.arrayBuffer());
+    assert.equal(hash(publicBytes),hash(fs.readFileSync(path.join(root,'app.html'))),'Published source must match the exact audited file');
+    summary.publicURL=response.url;
+    origin=new URL(response.url).origin;
+    for(const s of [{name:'public-property-desktop',propertyOnly:true,rich:true},{name:'public-property-mobile',propertyOnly:true,mobile:true,rich:true},{name:'public-normal-car',type:'Coche',rich:true}]){
+      const r=await scenarioRun(s);summary.tests.push({name:s.name,ok:true,pages:r.pages,bytes:r.bytes,photos:r.photos});
+      console.log('PUBLIC PASS',s.name,r.pages,r.bytes);
+    }
+    fs.writeFileSync(path.join(results,'audit-publicado.json'),JSON.stringify(summary,null,2));
+    console.log('PUBLIC VERIFIED',summary.publicURL);
+    return;
+  }
   await baselineFindings();await negativeAndTransitions();
   const normal={name:'normal-car-regression',type:'Coche',rich:true};
   const old=await scenarioRun(normal,'baseline',true),fresh=await scenarioRun(normal,'candidate',true);

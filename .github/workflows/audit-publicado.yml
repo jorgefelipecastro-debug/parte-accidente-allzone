@@ -1,0 +1,28 @@
+name: Verificar Parte Accidente publicado
+on:
+  push:
+    branches: [auditoria-publicacion-20261010]
+permissions:
+  contents: read
+jobs:
+  public-browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --prefix /tmp/allzone-audit playwright@1.62.1 pngjs@7.0.0
+      - run: /tmp/allzone-audit/node_modules/.bin/playwright install --with-deps chromium
+      - name: Probar la web publicada sin enviar correos reales
+        run: NODE_PATH=/tmp/allzone-audit/node_modules AUDIT_PUBLIC_URL='https://jorgefelipecastro-debug.github.io/parte-accidente-allzone/app.html?verificacion=c7b15c9bbfeff5fa59cd23a57c169a8c0264087c' node .audit/inmuebles.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parte-publicado-evidencias
+          path: .audit-results/
+          include-hidden-files: true
+          retention-days: 15

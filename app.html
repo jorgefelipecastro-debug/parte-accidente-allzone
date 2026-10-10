@@ -277,7 +277,8 @@ function initSketch(){
  sides.forEach((side,n)=>{
   let i=scene.items.findIndex(it=>it.side===side);
   if(i<0){
-   const d=defaults[n]||{x:180+(n%4)*165,y:170+Math.floor(n/4)*120,rot:0,length:170};
+   const slot=n-defaults.length;
+   const d=defaults[n]||{x:80+(slot%6)*140,y:105+Math.floor(slot/6)*175,rot:0,length:170};
    scene.items.push({side,x:d.x,y:d.y,rot:d.rot,length:side==='A'?Math.max(d.length,210):d.length});
   }
  });

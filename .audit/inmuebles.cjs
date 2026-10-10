@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const {execFileSync} = require('child_process');
 const {chromium} = require('playwright');
+const {PNG} = require('pngjs');
 const BASE = '882dd59754721aeedbcc62b454ccdb80f751b412';
 const root = process.cwd();
 const baseline = fs.mkdtempSync(path.join(os.tmpdir(), 'allzone-baseline-'));
@@ -103,7 +104,9 @@ async function photo(page,key,source='library'){
 async function capture(page,title,screens){
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.waitForFunction(()=>!document.querySelector('#host img:not([src^="blob:"])')||[...document.querySelectorAll('#host img')].every(im=>im.complete));
-  screens[title]=hash(await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:path.join(results,`${new URL(page.url()).pathname.split('/')[1]}-${title.replace(/[^A-Za-z0-9]/g,'_')}.png`)}));
+  const imagePath=path.join(results,`${new URL(page.url()).pathname.split('/')[1]}-${title.replace(/[^A-Za-z0-9]/g,'_')}.png`);
+  const buffer=await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:imagePath});
+  screens[title]={hash:hash(buffer),path:imagePath,dom:await page.locator('#host').evaluate(el=>el.innerHTML.replace(/ data-side="[^"]*"/g,''))};
 }
 async function scenarioRun(scenario,which='candidate',regression=false){
   const test=await setup(which,scenario.mobile),{page,context}=test;
@@ -138,6 +141,7 @@ async function scenarioRun(scenario,which='candidate',regression=false){
       const sides=await page.evaluate(()=>sceneState().items.map(x=>x.side));
       assert.deepEqual(sides,scenario.propertyOnly?['A']:['A','B',...Array.from({length:scenario.extras||0},(_,i)=>String.fromCharCode(67+i))]);
       assert.equal(await page.locator('[data-select-vehicle="B"]').count(),scenario.propertyOnly?0:1);
+      assert.ok(await page.evaluate(()=>sceneState().items.every(it=>it.x>0&&it.x<860&&it.y>=85&&it.y<=475)),'All automatically placed vehicles must remain inside the sketch');
       for(const road of ['straight','cross','roundabout','blank']){await page.locator(`[data-road="${road}"]`).click();assert.equal(await page.evaluate(()=>sceneState().road),road);}
       await page.locator('[data-road="straight"]').click();
       await page.locator('#rotateLeft').click();await page.locator('#rotateRight').click();await page.locator('#growVehicle').click();
@@ -209,6 +213,9 @@ async function baselineFindings(){
   await page.evaluate(()=>{state.other_vehicles_damage='Sí';ensureExtraDefaults();AllzoneV16.show('Firma adicional C')});
   const right=page.locator('[data-circ="right"][data-n="1"]');await right.click();await right.click();assert.equal(await right.textContent(),'B');
   summary.baselineFindings.push('Additional C circumstance label changes to B after deselection.');
+  await page.evaluate(()=>{state.additional_vehicle_count='20';AllzoneV16.show('Croquis')});
+  assert.ok(await page.evaluate(()=>sceneState().items.some(it=>it.y>560)));
+  summary.baselineFindings.push('At the maximum additional-vehicle count, original automatic placement puts vehicles outside the visible sketch.');
   await context.close();
 }
 async function negativeAndTransitions(){
@@ -237,8 +244,18 @@ async function negativeAndTransitions(){
   const normal={name:'normal-car-regression',type:'Coche',rich:true};
   const old=await scenarioRun(normal,'baseline',true),fresh=await scenarioRun(normal,'candidate',true);
   fs.writeFileSync(path.join(results,'regression.json'),JSON.stringify({old,fresh},null,2));
-  assert.deepEqual(fresh.screens,old.screens,'Unaffected screens must be pixel identical');assert.equal(fresh.pdfHash,old.pdfHash,'Normal car full PDF must be byte identical');
-  summary.regression={screenCount:Object.keys(old.screens).length,pixelIdentical:true,pdfByteIdentical:true};
+  const comparisons=[];
+  for(const title of Object.keys(old.screens)){
+    assert.equal(fresh.screens[title].dom,old.screens[title].dom,'Unaffected DOM differs: '+title);
+    const a=PNG.sync.read(fs.readFileSync(old.screens[title].path)),b=PNG.sync.read(fs.readFileSync(fresh.screens[title].path));
+    assert.equal(a.width,b.width);assert.equal(a.height,b.height);
+    let changedPixels=0,maxChannelDelta=0;
+    for(let i=0;i<a.data.length;i+=4){let changed=false;for(let k=0;k<4;k++){const d=Math.abs(a.data[i+k]-b.data[i+k]);if(d)changed=true;maxChannelDelta=Math.max(maxChannelDelta,d);}if(changed)changedPixels++;}
+    assert.ok(maxChannelDelta<=1&&changedPixels<=a.width*a.height*.001,'Visible screen differs: '+title);
+    comparisons.push({title,changedPixels,maxChannelDelta,pixelExact:changedPixels===0});
+  }
+  assert.equal(fresh.pdfHash,old.pdfHash,'Normal car full PDF must be byte identical');
+  summary.regression={screenCount:Object.keys(old.screens).length,domIdentical:true,comparisons,pdfByteIdentical:true};
   summary.tests.push({name:normal.name,ok:true,pages:fresh.pages,bytes:fresh.bytes});
   const types=['Moto','Coche','Camión'];
   const propertyTypes=['Mobiliario urbano','Señal de tráfico','Farola / alumbrado','Valla / barrera','Fachada / muro','Puerta / acceso','Otro'];

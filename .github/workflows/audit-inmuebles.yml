@@ -1,0 +1,33 @@
+name: Auditoria Parte Accidente inmuebles
+on:
+  push:
+    branches: [auditoria-inmuebles-20261010]
+permissions:
+  contents: read
+jobs:
+  browser-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --prefix /tmp/allzone-audit playwright@1.62.1
+      - run: /tmp/allzone-audit/node_modules/.bin/playwright install --with-deps chromium
+      - name: Comprobar todos los recorridos sin enviar correos reales
+        run: NODE_PATH=/tmp/allzone-audit/node_modules node .audit/inmuebles.cjs
+      - name: Renderizar PDF del inmueble
+        if: success()
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          pdftoppm -f 1 -l 5 -scale-to 1100 -png .audit-results/inmueble-escritorio.pdf .audit-results/inmueble-pagina
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auditoria-inmuebles-evidencias
+          path: .audit-results/
+          retention-days: 15

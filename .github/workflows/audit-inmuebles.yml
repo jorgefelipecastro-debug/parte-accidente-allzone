@@ -31,3 +31,4 @@ jobs:
           name: auditoria-inmuebles-evidencias
           path: .audit-results/
           retention-days: 15
+          include-hidden-files: true

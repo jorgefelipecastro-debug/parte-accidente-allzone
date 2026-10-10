@@ -103,7 +103,7 @@ async function photo(page,key,source='library'){
 async function capture(page,title,screens){
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.waitForFunction(()=>!document.querySelector('#host img:not([src^="blob:"])')||[...document.querySelectorAll('#host img')].every(im=>im.complete));
-  screens[title]=hash(await page.locator('.shell').screenshot());
+  screens[title]=hash(await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:path.join(results,`${new URL(page.url()).pathname.split('/')[1]}-${title.replace(/[^A-Za-z0-9]/g,'_')}.png`)}));
 }
 async function scenarioRun(scenario,which='candidate',regression=false){
   const test=await setup(which,scenario.mobile),{page,context}=test;
@@ -236,6 +236,7 @@ async function negativeAndTransitions(){
   await baselineFindings();await negativeAndTransitions();
   const normal={name:'normal-car-regression',type:'Coche',rich:true};
   const old=await scenarioRun(normal,'baseline',true),fresh=await scenarioRun(normal,'candidate',true);
+  fs.writeFileSync(path.join(results,'regression.json'),JSON.stringify({old,fresh},null,2));
   assert.deepEqual(fresh.screens,old.screens,'Unaffected screens must be pixel identical');assert.equal(fresh.pdfHash,old.pdfHash,'Normal car full PDF must be byte identical');
   summary.regression={screenCount:Object.keys(old.screens).length,pixelIdentical:true,pdfByteIdentical:true};
   summary.tests.push({name:normal.name,ok:true,pages:fresh.pages,bytes:fresh.bytes});

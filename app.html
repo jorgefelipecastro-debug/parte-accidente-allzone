@@ -699,14 +699,14 @@ async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdf
   if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El PDF se ha generado, pero no se pudo borrar el borrador local. Antes de otro parte, recarga y elige no continuar el borrador.';
  }
 }else if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El archivo está preparado; no se ha enviado por correo.';}catch(e){if(note)note.textContent='No se pudo generar: '+e.message;else navMessage(e.message);console.error(e);}finally{pdfBusy=false;nextBtn.disabled=false;}}
-const MAIL_API='https://parte-accidente-mailer-production.up.railway.app';
+const MAIL_API='https://raiekkhzybordgfhbvas.supabase.co/functions/v1/send-accident-report';
 const TELEMETRY_API='https://raiekkhzybordgfhbvas.supabase.co/functions/v1/accident-send-telemetry';
 function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(r.error||new Error('No se pudo preparar el PDF.'));r.readAsDataURL(blob);});}
 let mailerWarmPromise=null;
 function warmMailer(){
  if(mailerWarmPromise)return mailerWarmPromise;
  const t0=performance.now();
- mailerWarmPromise=fetch(MAIL_API+'/health',{method:'GET',cache:'no-store'})
+ mailerWarmPromise=fetch(MAIL_API,{method:'GET',cache:'no-store'})
   .catch(()=>null)
   .finally(()=>{mailTelemetry.warm_ms=Math.round(performance.now()-t0);setTimeout(()=>{mailerWarmPromise=null;},30000);});
  return mailerWarmPromise;
@@ -778,37 +778,28 @@ async function sendReportByEmail(){
   let response;
   const fetch0=performance.now();
   try{
-   response=await fetch(MAIL_API+'/send-report',{
+   response=await fetch(MAIL_API,{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{
+     'Content-Type':'application/pdf',
+     'X-Recipient':recipients[0],
+     'X-Filename':report.commonFilename,
+     'X-Plate-A':state.a_plate||'',
+     'X-Plate-B':isPropertyOnly()?'':state.b_plate||'',
+     'X-Accident-Date':state.acc_date||'',
+     'X-Accident-Place':encodeURIComponent(state.acc_place||''),
+     'X-Mail-Batch-Id':currentMailBatchId
+    },
     signal:controller.signal,
-    body:JSON.stringify({
-     recipients,
-     filename:report.commonFilename,
-     pdfBase64:report.fullPdfBase64,
-     mailBatchId:currentMailBatchId,
-     plateA:state.a_plate,
-     plateB:isPropertyOnly()?'':state.b_plate,
-     date:state.acc_date,
-     place:state.acc_place,
-     postcode:state.acc_postcode,
-     clientTimings:{
-      warm_ms:mailTelemetry.warm_ms,
-      prepare_ms:mailTelemetry.prepare_ms,
-      build_ms:mailTelemetry.build_ms,
-      base64_ms:mailTelemetry.base64_ms,
-      pdf_bytes:mailTelemetry.pdf_bytes,
-      wait_report_ms:mailTelemetry.wait_report_ms
-     }
-    })
+    body:report.fullResult.blob
    });
   }finally{clearTimeout(timeout);}
   mailTelemetry.fetch_ms=Math.round(performance.now()-fetch0);
   let data={};try{data=await response.json();}catch{}
   if(!response.ok||!data.ok){
-   if(data.error==='mail_not_configured')throw new Error('El envío automático todavía no está autorizado.');
-   if(data.error==='mail_provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
-   if(data.error==='mail_provider_timeout')throw new Error('El proveedor de correo ha tardado demasiado. Reintenta el envío.');
+   if(data.error==='mail_not_configured'||data.error==='resend_not_configured')throw new Error('El envío automático todavía no está autorizado.');
+   if(data.error==='mail_provider_rejected'||data.error==='provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
+   if(data.error==='mail_provider_timeout'||data.error==='provider_timeout')throw new Error('El proveedor de correo ha tardado demasiado. Reintenta el envío.');
    if(data.error==='attachment_too_large')throw new Error('El PDF es demasiado grande para enviarlo.');
    throw new Error('El servidor de correo no pudo completar el envío.');
   }

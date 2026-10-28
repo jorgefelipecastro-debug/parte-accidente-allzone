@@ -1,7 +1,7 @@
-name: Verificar envio directo
+name: Verificar envio directo publicado
 on:
   push:
-    branches: [auditoria-envio-directo-20261028]
+    branches: [auditoria-directo-publicado-20261028]
 permissions:
   contents: read
 jobs:
@@ -17,7 +17,7 @@ jobs:
           node-version: '24'
       - run: npm install --prefix /tmp/allzone-audit playwright@1.62.1 pngjs@7.0.0
       - run: /tmp/allzone-audit/node_modules/.bin/playwright install --with-deps chromium
-      - run: NODE_PATH=/tmp/allzone-audit/node_modules node .audit/inmuebles.cjs
+      - run: NODE_PATH=/tmp/allzone-audit/node_modules AUDIT_PUBLIC_URL='https://jorgefelipecastro-debug.github.io/parte-accidente-allzone/app.html?verificacion=4cb972fbaa71f41dc573a209a2ba95c652430438' node .audit/inmuebles.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

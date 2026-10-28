@@ -270,8 +270,8 @@ async function negativeAndTransitions(){
     return;
   }
   const prior=fs.readFileSync(path.join(baseline,'app.html'),'utf8'),current=fs.readFileSync(path.join(root,'app.html'),'utf8');
-  assert.equal(current.match(/<style>([\\s\\S]*?)<\\/style>/)[1],prior.match(/<style>([\\s\\S]*?)<\\/style>/)[1]);
-  assert.deepEqual(current.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/g),prior.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/g));
+  assert.equal(current.split('<style>')[1].split('</style>')[0],prior.split('<style>')[1].split('</style>')[0]);
+  assert.deepEqual(current.match(new RegExp('data:image/[^;]+;base64,[A-Za-z0-9+/=]+','g')),prior.match(new RegExp('data:image/[^;]+;base64,[A-Za-z0-9+/=]+','g')));
   await baselineFindings();await negativeAndTransitions();
   const normal={name:'normal-car-regression',type:'Coche',rich:true};
   const old=await scenarioRun(normal,'baseline',true),fresh=await scenarioRun(normal,'candidate',true);

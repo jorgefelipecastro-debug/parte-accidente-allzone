@@ -110,7 +110,7 @@ async function capture(page,title,screens){
   await page.mouse.move(1,1);
   await page.waitForFunction(()=>!document.querySelector('#host img:not([src^="blob:"])')||[...document.querySelectorAll('#host img')].every(im=>im.complete));
   const imagePath=path.join(results,`${new URL(page.url()).pathname.split('/')[1]}-${title.replace(/[^A-Za-z0-9]/g,'_')}.png`);
-  const buffer=await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:imagePath});
+  const buffer=await page.locator('.shell').screenshot({animations:'disabled',caret:'hide',path:imagePath,mask:[page.locator('input,select,textarea')],maskColor:'#ffffff'});
   screens[title]={hash:hash(buffer),path:imagePath,dom:await page.locator('#host').evaluate(el=>el.innerHTML.replace(/ data-side="[^"]*"/g,''))};
 }
 async function scenarioRun(scenario,which='candidate',regression=false){
@@ -269,6 +269,9 @@ async function negativeAndTransitions(){
     console.log('PUBLIC VERIFIED',summary.publicURL);
     return;
   }
+  const prior=fs.readFileSync(path.join(baseline,'app.html'),'utf8'),current=fs.readFileSync(path.join(root,'app.html'),'utf8');
+  assert.equal(current.match(/<style>([\\s\\S]*?)<\\/style>/)[1],prior.match(/<style>([\\s\\S]*?)<\\/style>/)[1]);
+  assert.deepEqual(current.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/g),prior.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/g));
   await baselineFindings();await negativeAndTransitions();
   const normal={name:'normal-car-regression',type:'Coche',rich:true};
   const old=await scenarioRun(normal,'baseline',true),fresh=await scenarioRun(normal,'candidate',true);
@@ -298,5 +301,11 @@ async function negativeAndTransitions(){
   scenarios.push({name:'additional-mobile',type:'Camión',extras:1,extraType:'Moto',mobile:true});
   for(const s of scenarios){console.log('RUN',s.name);const r=await scenarioRun(s);summary.tests.push({name:s.name,ok:!r.knownFailure,steps:r.visited.length,pages:r.pages,bytes:r.bytes,photos:r.photos,...(r.knownFailure?{knownFailure:r.knownFailure}:{})});fs.writeFileSync(path.join(results,'audit.json'),JSON.stringify(summary,null,2));console.log(r.knownFailure?'KNOWN LIMIT':'PASS',s.name,r.pages+' pages',r.bytes+' bytes');}
   try{const r=await fetch('https://raiekkhzybordgfhbvas.supabase.co/functions/v1/send-accident-report',{headers:{Origin:'https://jorgefelipecastro-debug.github.io'},signal:AbortSignal.timeout(20000)});summary.liveMailHealth={status:r.status,body:await r.json(),cors:r.headers.get('access-control-allow-origin')};}catch(e){summary.liveMailHealth={error:e.message};}assert.equal(summary.liveMailHealth.status,200);assert.equal(summary.liveMailHealth.body.direct,true);assert.equal(summary.liveMailHealth.cors,'https://jorgefelipecastro-debug.github.io');
+  const endpoint='https://raiekkhzybordgfhbvas.supabase.co/functions/v1/send-accident-report',originHeader='https://jorgefelipecastro-debug.github.io';
+  const preflight=await fetch(endpoint,{method:'OPTIONS',headers:{Origin:originHeader,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type,x-recipient,x-filename,x-plate-a,x-plate-b,x-accident-date,x-accident-place,x-mail-batch-id'},signal:AbortSignal.timeout(20000)});
+  assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),originHeader);
+  const empty=await fetch(endpoint,{method:'POST',headers:{Origin:originHeader,'Content-Type':'application/pdf','X-Recipient':'auditoria@example.invalid'},body:new Uint8Array(),signal:AbortSignal.timeout(20000)});
+  const emptyBody=await empty.json();assert.equal(empty.status,400);assert.equal(emptyBody.error,'invalid_attachment');
+  summary.liveDirectChecks={preflight:204,emptyPdfRejected:400,credentialsConfigured:true,realEmailSent:false};
   fs.writeFileSync(path.join(results,'audit.json'),JSON.stringify(summary,null,2));console.log('AUDIT COMPLETE',summary.tests.length,'checks');
 })().catch(e=>{summary.failure=e.stack;fs.writeFileSync(path.join(results,'audit.json'),JSON.stringify(summary,null,2));console.error(e);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.close();});

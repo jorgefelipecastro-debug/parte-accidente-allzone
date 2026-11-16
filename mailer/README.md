@@ -1,6 +1,6 @@
 # Servicio de correo del Parte de Accidente
 
-El Worker `parte-accidente-mailer` se compila desde la raíz del repositorio con `npx wrangler deploy --config mailer/wrangler.toml`, usando la rama `correo-respaldo-cloudflare-brevo`. No cambiar `main` para iniciar una compilación.
+El Worker `parte-accidente-mailer` se compila desde el directorio `mailer` con `npx wrangler deploy --config wrangler.toml`, usando la rama `correo-respaldo-cloudflare-brevo`. No cambiar `main` para iniciar una compilación.
 
 Configurar en el Worker los secretos `BREVO_API_KEY` y `TURNSTILE_SECRET`, y la variable `BREVO_SENDER` con el remitente verificado. No guardar claves en Git ni en el navegador de la aplicación. `RATE_LIMITER` se declara en Wrangler.
 

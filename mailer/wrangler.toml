@@ -1,0 +1,11 @@
+name = "parte-accidente-mailer"
+main = "worker.mjs"
+compatibility_date = "2026-11-16"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "7112601"
+simple = { limit = 6, period = 60 }

@@ -700,6 +700,65 @@ async function downloadPdf(mode='pair',partner='B'){if(pdfBusy)return;sync();pdf
  }
 }else if(note)note.textContent=result.pages+' página(s) · '+(result.blob.size/1024/1024).toFixed(2)+' MB. El archivo está preparado; no se ha enviado por correo.';}catch(e){if(note)note.textContent='No se pudo generar: '+e.message;else navMessage(e.message);console.error(e);}finally{pdfBusy=false;nextBtn.disabled=false;}}
 const MAIL_API='https://raiekkhzybordgfhbvas.supabase.co/functions/v1/send-accident-report';
+// Draft: activate only when the independent route has passed the mailbox tests.
+const PRIMARY_MAIL_API='';
+const TURNSTILE_SITE_KEY='';
+let deliveryUncertain=false;
+let turnstileLoader;
+function getTurnstileToken(){
+ if(!turnstileLoader)turnstileLoader=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  script.async=true;script.onload=resolve;
+  script.onerror=()=>{turnstileLoader=null;script.remove();reject(new Error('No se pudo cargar la verificación de envío.'));};
+  document.head.append(script);
+ });
+ return (async()=>{
+  await turnstileLoader;
+  return new Promise((resolve,reject)=>{
+   const box=document.createElement('div');document.querySelector('#sendAndFinish').before(box);
+   let id;
+   const finish=(ok,value)=>{clearTimeout(timer);if(id!==undefined)window.turnstile.remove(id);box.remove();ok?resolve(value):reject(new Error('No se pudo verificar el envío. Vuelve a intentarlo.'));};
+   const timer=setTimeout(()=>finish(false),25000);
+   try{id=window.turnstile.render(box,{sitekey:TURNSTILE_SITE_KEY,action:'accident_mail',appearance:'interaction-only',
+    callback:token=>finish(true,token),'error-callback':()=>finish(false),'expired-callback':()=>finish(false)});}
+   catch{finish(false);}
+  });
+ })();
+}
+async function chooseMailRoute(headers,body){
+ const backup=async()=>{
+  try{
+   const r=await fetch(MAIL_API,{method:'POST',headers,body,signal:AbortSignal.timeout(65000)});
+   const data=await r.json();
+   if(r.ok && data?.ok===true)return {data,primary:false};
+   if([402,413,429].includes(r.status)||['invalid_attachment','invalid_recipients','resend_not_configured','rate_limited'].includes(data?.error))
+    return {data,primary:false};
+  }catch{}
+  return {data:{error:'delivery_unknown'},primary:false};
+ };
+ if(!PRIMARY_MAIL_API || !TURNSTILE_SITE_KEY)return backup();
+ // No PDF or recipient data is sent by this health check.
+ try{
+  const ready=await fetch(PRIMARY_MAIL_API,{cache:'no-store',signal:AbortSignal.timeout(5000)});
+  if(!ready.ok || (await ready.json()).ready!==true)return backup();
+ }catch{return backup();}
+ const token=await getTurnstileToken();
+ try{
+  const r=await fetch(PRIMARY_MAIL_API,{method:'POST',headers:{...headers,'X-Turnstile-Token':token},body,signal:AbortSignal.timeout(55000)});
+  const data=await r.json();
+  if(r.ok && data?.ok===true)return {data,primary:true};
+  if(!r.ok && data?.noDelivery===true && data?.fallback===true)return backup();
+  if(!r.ok && data?.noDelivery===true)return {data,primary:true};
+ }catch{}
+ return {data:{error:'delivery_unknown'}, primary:true};
+}
+async function saveUnsentReport(){
+ const report=await prepareEmailReport();
+ const url=URL.createObjectURL(report.fullResult.blob);
+ const a=document.createElement('a');a.href=url;a.download=report.commonFilename;
+ document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 const TELEMETRY_API='https://raiekkhzybordgfhbvas.supabase.co/functions/v1/accident-send-telemetry';
 function blobToBase64(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]||'');r.onerror=()=>reject(r.error||new Error('No se pudo preparar el PDF.'));r.readAsDataURL(blob);});}
 let mailerWarmPromise=null;
@@ -741,7 +800,7 @@ async function prepareEmailReport(){
  finally{preparedEmailReportPromise=null;}
 }
 async function sendReportByEmail(){
- if(pdfBusy)return;
+ if(pdfBusy||deliveryUncertain)return;
  sync();
  const recipients=[String(state.b_copy_email||'').trim()].filter(Boolean);
  const emailField=document.querySelector('[data-field="b_copy_email"]');
@@ -773,30 +832,25 @@ async function sendReportByEmail(){
   const report=await prepareEmailReport();
   mailTelemetry.wait_report_ms=Math.round(performance.now()-wait0);
   if(!currentMailBatchId)currentMailBatchId=(crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(16).slice(2)));
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),65000);
-  let response;
   const fetch0=performance.now();
-  try{
-   response=await fetch(MAIL_API,{
-    method:'POST',
-    headers:{
-     'Content-Type':'application/pdf',
-     'X-Recipient':recipients[0],
-     'X-Filename':report.commonFilename,
-     'X-Plate-A':state.a_plate||'',
-     'X-Plate-B':isPropertyOnly()?'':state.b_plate||'',
-     'X-Accident-Date':state.acc_date||'',
-     'X-Accident-Place':encodeURIComponent(state.acc_place||''),
-     'X-Mail-Batch-Id':currentMailBatchId
-    },
-    signal:controller.signal,
-    body:report.fullResult.blob
-   });
-  }finally{clearTimeout(timeout);}
+  const {data,primary}=await chooseMailRoute({
+   'Content-Type':'application/pdf',
+   'X-Recipient':recipients[0],
+   'X-Filename':report.commonFilename,
+   'X-Plate-A':state.a_plate||'',
+   'X-Plate-B':isPropertyOnly()?'':state.b_plate||'',
+   'X-Accident-Date':state.acc_date||'',
+   'X-Accident-Place':encodeURIComponent(state.acc_place||''),
+   'X-Mail-Batch-Id':currentMailBatchId
+  },report.fullResult.blob);
   mailTelemetry.fetch_ms=Math.round(performance.now()-fetch0);
-  let data={};try{data=await response.json();}catch{}
-  if(!response.ok||!data.ok){
+  if(!data.ok){
+   if(data.error==='delivery_unknown'){
+    deliveryUncertain=true;
+    throw new Error('No se pudo confirmar el envío. Comprueba con Flota y el otro destinatario antes de reenviar.');
+   }
+   if(data.error==='invalid_attachment')throw new Error('El servidor no admite este PDF. Descarga el parte completo.');
+   if(data.error==='verification_failed'||data.error==='verification_unavailable'||data.error==='verification_required')throw new Error('No se pudo verificar el envío. Inténtalo de nuevo.');
    if(data.error==='mail_not_configured'||data.error==='resend_not_configured')throw new Error('El envío automático todavía no está autorizado.');
    if(data.error==='mail_provider_rejected'||data.error==='provider_rejected')throw new Error('El proveedor de correo rechazó el envío'+(data.failedRecipient?' a '+data.failedRecipient:'')+'.');
    if(data.error==='mail_provider_timeout'||data.error==='provider_timeout')throw new Error('El proveedor de correo ha tardado demasiado. Reintenta el envío.');
@@ -804,7 +858,7 @@ async function sendReportByEmail(){
    throw new Error('El servidor de correo no pudo completar el envío.');
   }
   mailTelemetry.total_send_ms=Math.round(performance.now()-total0);
-  try{
+  if(!primary)try{
    fetch(TELEMETRY_API,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -824,17 +878,18 @@ async function sendReportByEmail(){
    pages:report.fullResult.pages,
    photoCount:photoTargets().filter(t=>photos.has(t.key)).length
   };
-  await clearPersistedDraft();
+  try{await clearPersistedDraft();}catch(e){console.error('No se pudo limpiar el borrador tras el envío',e);}
   idx=getSteps().findIndex(s=>s.title==='Revisión');
   render();
  }catch(e){
   const msg=e&&e.name==='AbortError'?'El servidor ha tardado demasiado. Intenta enviar de nuevo; el parte se conserva.':e.message;
-  navMessage('No se ha enviado el parte: '+msg);
+  navMessage(deliveryUncertain?msg:'No se ha enviado el parte: '+msg);
+  const download=document.getElementById('downloadUnsentReport');if(download)download.hidden=false;
   console.error(e);
  }finally{
   if(sendingDotsTimer)clearInterval(sendingDotsTimer);
   if(sendingMsg&&sendingMsg.isConnected)sendingMsg.remove();
-  pdfBusy=false;nextBtn.disabled=false;if(btn){btn.disabled=false;btn.textContent='ENVIAR Y FINALIZAR';}
+  pdfBusy=false;nextBtn.disabled=false;if(btn){btn.disabled=deliveryUncertain;btn.textContent='ENVIAR Y FINALIZAR';}
  }
 }
 let finalFleetReport=null,finalFleetReportPreparing=false;
@@ -881,7 +936,7 @@ async function downloadOrShareFleetReport(){
 }
 function reviewScreen(){host.innerHTML=`<div class="eyebrow">Finalizado</div><h1>Parte enviado correctamente</h1><p class="lead">El parte se ha enviado por correo. <b>${isPropertyOnly()?'Flota y el propietario o responsable':'Flota y el contrario'} han recibido exactamente el mismo PDF</b>, con el parte cumplimentado, la dirección exacta y todas las fotografías del accidente.</p><div class="card"><p><b>Dirección:</b> ${esc(state.acc_place||'—')}</p><p><b>Código postal:</b> ${esc(state.acc_postcode||'—')}</p><button type="button" class="pillbtn primary" id="downloadFullOnly" disabled>PREPARANDO INFORME COMPLETO…</button><p class="hint">WhatsApp recibirá un solo archivo PDF. Las fotografías y la ubicación van dentro del mismo documento, no como archivos separados.</p><div id="finalReportStatus" role="status">Generando informe…</div></div>`;document.getElementById('downloadFullOnly').onclick=downloadOrShareFleetReport;prepareFinalFleetReport();}
 function openDaaDocument(){return downloadPdf('pair');}
-const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){host.innerHTML=`<div class="eyebrow">Envío</div><h1>Enviar parte por correo</h1><div class="card"><div class="field"><label>Correo de Flota</label><input type="email" value="flota@allzonelogistics.com" readonly aria-readonly="true"></div>${field('b_copy_email',isPropertyOnly()?'Correo del propietario / responsable':'Correo del contrario','email',{required:true})}<button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;warmMailer();prepareEmailReport().catch(()=>{});};
+const oldDelivery=baseSteps.find(s=>s.title==='Entrega');oldDelivery.render=function(){preparedEmailReport=null;host.innerHTML=`<div class="eyebrow">Envío</div><h1>Enviar parte por correo</h1><div class="card"><div class="field"><label>Correo de Flota</label><input type="email" value="flota@allzonelogistics.com" readonly aria-readonly="true"></div>${field('b_copy_email',isPropertyOnly()?'Correo del propietario / responsable':'Correo del contrario','email',{required:true})}<button type="button" class="pillbtn primary" id="sendAndFinish" disabled>ENVIAR Y FINALIZAR</button><button type="button" class="pillbtn" id="downloadUnsentReport" hidden>DESCARGAR PDF COMPLETO</button></div>`;bindBasic();const email=document.querySelector('[data-field="b_copy_email"]'),btn=document.getElementById('sendAndFinish');const refresh=()=>{state.b_copy_email=email.value;btn.disabled=!(email.value&&email.checkValidity())||pdfBusy||deliveryUncertain;};email.addEventListener('input',refresh);refresh();btn.onclick=sendReportByEmail;document.getElementById('downloadUnsentReport').onclick=()=>saveUnsentReport().catch(e=>navMessage('No se pudo descargar el parte: '+e.message));if(!PRIMARY_MAIL_API)warmMailer();prepareEmailReport().catch(()=>{});};
 const now=new Date(),pad=n=>String(n).padStart(2,'0');state.acc_date=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());state.acc_time=pad(now.getHours())+':'+pad(now.getMinutes());
 window.AllzoneV16={version:VERSION,artworkReady,buildDocument,photos,navTimes,step:()=>({index:idx,title:getSteps()[idx].title}),show:title=>{sync();idx=getSteps().findIndex(s=>s.title===title);render();},render,ready:()=>photoJobs.size===0};
 window.addEventListener('pagehide',purgePartOnExit);startFreshSession();
